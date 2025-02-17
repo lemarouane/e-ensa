@@ -6,7 +6,6 @@ use App\Entity\Doctorants;
 use App\Entity\ValidatedDoctorants;
 use App\Entity\Publication;
 use App\Entity\StructRech; 
-
 use App\Form\DoctorantsType;
 use App\Repository\DoctorantsRepository;
 use App\Repository\PublicationRepository;
@@ -23,8 +22,6 @@ use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 use Psr\Log\LoggerInterface; 
-
-
 
 class DoctorantsController extends AbstractController
 {
@@ -64,6 +61,7 @@ class DoctorantsController extends AbstractController
      * @param DoctorantsRepository $doctorantsRepository
      * @param PersonnelRepository $personnelRepository
      * @param StructRechRepository $structRechRepository
+     * @param Request $request
      * @return Response
      */
     #[Route('/list-doctorants', name: 'list_doctorants')]
@@ -88,7 +86,6 @@ class DoctorantsController extends AbstractController
             'dateFilter' => $dateFilter, // Pass the current filter to the view
         ]);
     }
-    
 
     /**
      * Route to edit an existing doctorant.
@@ -333,6 +330,9 @@ class DoctorantsController extends AbstractController
      * @param EntityManagerInterface $entityManager
      * @return Response
      */
+
+
+
     #[Route('/doctorants-statistiques', name: 'doctorants_statistiques')]
     public function statistiques(EntityManagerInterface $entityManager): Response
     {
@@ -661,46 +661,6 @@ class DoctorantsController extends AbstractController
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-    
-
-
     #[Route('/import-scopus-ids', name: 'import_scopus_ids', methods: ['GET', 'POST'])]
     public function importScopusIds(
         Request $request,
@@ -881,534 +841,462 @@ class DoctorantsController extends AbstractController
     }
         
     
-
+    #[Route('/import-auth-abstract-infos', name: 'import_auth_abstract_infos', methods: ['GET', 'POST'])]
+    public function importAuthAbstractInfos(
+        Request $request,
+        EntityManagerInterface $entityManager,
+        PublicationRepository $publicationRepository
+    ): Response {
+        if ($request->isMethod('POST')) {
+            $file = $request->files->get('excel_file');
+            if ($file) {
+                try {
+                    $spreadsheet = IOFactory::load($file->getPathname());
+                    $worksheet = $spreadsheet->getActiveSheet();
+                    $rows = $worksheet->toArray();
+                    array_shift($rows); // Remove header row
+    
+                    $processed = 0;
+                    $skipped = 0;
+                    $unmatchedTitles = []; // Collect unmatched titles here
+                    $errors = []; // Collect errors here
+                    $batchSize = 20;
+    
+                    foreach ($rows as $index => $row) { // Iterate over $rows
+                        try {
+                            // Handle row processing logic here...
+    
+                            $excelTitle = trim($row[3] ?? ''); // Title column
+                            $authorNames = explode(';', trim($row[1] ?? '')); // Author full names column
+    
+                            // Process author names to remove commas and Scopus IDs
+                            $processedAuthorNames = array_map(function ($author) {
+                                return trim(preg_replace('/\s*\(.*?\)/', '', str_replace(',', '', $author)));
+                            }, $authorNames);
+    
+                            $authorIds = explode(';', trim($row[2] ?? '')); // Author(s) ID column
+                            $abstract = trim($row[17] ?? ''); // Abstract column
+                            $organization = trim($row[15] ?? ''); // Affiliations column
+    
+                            if (empty($excelTitle)) {
+                                $skipped++;
+                                continue; // Skip rows with empty titles
+                            }
+    
+                            // Find publication by title
+                            $publication = $publicationRepository->findOneBy(['title' => $excelTitle]);
+                            if (!$publication) {
+                                $unmatchedTitles[] = $excelTitle; // Add to unmatched titles
+                                $skipped++;
+                                continue;
+                            }
+    
+                            // Update the publication fields
+                            $publication->setAuthorNames($processedAuthorNames); // Use processed names
+                            $publication->setAuthorIds($authorIds);
+                            $publication->setAbstract($abstract);
+                            $publication->setOrganization($organization);
+    
+                            // Set the new fields from the Excel columns (E-L)
+                            $publication->setYear($row[4] ?? 'N/A'); // Year
+                            $publication->setSourceTitle($row[5] ?? 'N/A'); // Source Title
+                            $publication->setVolume($row[6] ?? 'N/A'); // Volume
+                            $publication->setIssue($row[7] ?? 'N/A'); // Issue
+                            $publication->setArtNo($row[8] ?? 'N/A'); // Art. No. (Using DOI as placeholder)
+                            $publication->setPageStart($row[9] ?? 'N/A'); // Page Start
+                            $publication->setPageEnd($row[10] ?? 'N/A'); // Page End
+                            $publication->setPageCount($row[11] ?? '0'); // Page Count
+    
+                            // Truncate the organization name if it exceeds 255 characters
+                            $organization = substr($organization, 0, 255); // Truncate to fit database limit
+                            $publication->setOrganization($organization);
+    
+                            // Persist the publication
+                            $entityManager->persist($publication);
+                            $processed++;
+    
+                            // Flush in batches
+                            if (($processed % $batchSize) === 0) {
+                                try {
+                                    $entityManager->flush();
+                                    $entityManager->clear();  // Clear the EntityManager to free memory
+                                } catch (\Exception $e) {
+                                    $errors[] = "Error during batch processing: " . $e->getMessage();
+                                    $entityManager->clear(); // Clear to keep going
+                                }
+                            }
+                        } catch (\Exception $e) {
+                            $errors[] = "Error processing row $index: " . $e->getMessage();
+                        }
+                    }
+    
+                    // Flush any remaining entities
+                    try {
+                        $entityManager->flush();
+                        $entityManager->clear();
+                    } catch (\Exception $e) {
+                        $errors[] = "Error during final flush: " . $e->getMessage();
+                    }
+    
+                    // Add success message
+                    $this->addFlash('success', "$processed publications updated successfully.");
+    
+                    // Report unmatched titles (grouped together)
+                    if (!empty($unmatchedTitles)) {
+                        $this->addFlash(
+                            'warning',
+                            count($unmatchedTitles) . " unmatched titles: <br>" . implode('<br>', array_slice($unmatchedTitles, 0, 10)) .
+                            (count($unmatchedTitles) > 10 ? "<br>...and more" : "")
+                        );
+                    }
+    
+                    // Report errors (if any)
+                    if (!empty($errors)) {
+                        $this->addFlash(
+                            'error',
+                            "Errors occurred during processing: <br>" . implode('<br>', array_slice($errors, 0, 10)) .
+                            (count($errors) > 10 ? "<br>...and more" : "")
+                        );
+                    }
+                } catch (\Exception $e) {
+                    $this->addFlash('error', 'Error processing the file: ' . $e->getMessage());
+                }
+            } else {
+                $this->addFlash('error', 'No file uploaded.');
+            }
+    
+            return $this->redirectToRoute('import_auth_abstract_infos');
+        }
+    
+        return $this->render('personnel/import_auth_abstract_infos.html.twig');
+    }
 
     
-
-
-
-
-
-
-/**
- * @Route("/list-personnel", name="personnel_list")
- */
-public function listPersonnel(PersonnelRepository $personnelRepository): Response
-{
-    $personnels = $personnelRepository->findAll();
-
-    return $this->render('personnel/list_personnel.html.twig', [
-        'personnels' => $personnels,
-    ]);
-}
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        
-        
-
-        
-
-        
-#[Route('/personnel/statistics', name: 'personnel_statistics')]
-public function personnelStatistics(
-    Request $request,
-    PersonnelRepository $personnelRepository,
-    PublicationRepository $publicationRepository,
-    EntityManagerInterface $entityManager
-): Response {
-    $selectedYear = $request->query->get('year', 'ALL');
-    $selectedStructure = $request->query->get('structure', 'ALL');
-
-    // Fetch all available structures for the dropdown
-    $structures = $entityManager->getRepository(StructRech::class)->findAll();
-    $structureChoices = [];
-    foreach ($structures as $structure) {
-        $structureChoices[$structure->getId()] = $structure->getLibelleStructure();
-    }
-
-    // Fetch personnel based on the selected structure
-    if ($selectedStructure !== 'ALL') {
-        $personnels = $personnelRepository->findBy(['structureRech' => $selectedStructure]);
-    } else {
-        $personnels = $personnelRepository->findAll();
-    }
-
-    $totalPublications = 0;
-    $publicationTypes = [];
-    $publicationTrends = array_fill_keys(range(1990, 2025), 0);
-    $personnelContributions = [];
-    $creatorCount = [];
-
-    // Loop through each personnel to gather data
-    foreach ($personnels as $personnel) {
-        $publications = $publicationRepository->findBy([
-            'personnel' => $personnel,
-            'status' => 'validée'
-        ]);
-
-        if ($selectedYear !== 'ALL') {
-            $publications = array_filter($publications, function ($publication) use ($selectedYear) {
-                return substr($publication->getCoverDate(), 0, 4) == $selectedYear;
-            });
+    #[Route('/personnel/statistics', name: 'personnel_statistics')]
+    public function personnelStatistics(
+        Request $request,
+        PersonnelRepository $personnelRepository,
+        PublicationRepository $publicationRepository,
+        EntityManagerInterface $entityManager
+    ): Response {
+        $selectedYear = $request->query->get('year', 'ALL');
+        $selectedStructure = $request->query->get('structure', 'ALL');
+    
+        // Fetch all available structures for the dropdown
+        $structures = $entityManager->getRepository(StructRech::class)->findAll();
+        $structureChoices = [];
+        foreach ($structures as $structure) {
+            $structureChoices[$structure->getId()] = $structure->getLibelleStructure();
         }
-
-        $publicationCount = count($publications);
-        $totalPublications += $publicationCount;
-
-        // Loop through publications for stats
-        foreach ($publications as $publication) {
-            $type = $publication->getAggregationType() ?? 'Other';
-            $publicationTypes[$type] = ($publicationTypes[$type] ?? 0) + 1;
-
-            $year = substr($publication->getCoverDate(), 0, 4);
-            if ($selectedYear === 'ALL' && isset($publicationTrends[$year])) {
-                $publicationTrends[$year]++;
-            }
-
-            // Count occurrences of the creator
-            $creatorName = explode(" ", $publication->getCreator())[0]; // Extract the first word (creator's first name)
-            $creator = $personnelRepository->findOneBy(['nom' => strtoupper($creatorName)]); // Match with 'nom' in the Personnel table
-
-            if ($creator) {
-                $creatorKey = $creator->getNom() . ' ' . $creator->getPrenom();
-                $creatorCount[$creatorKey] = ($creatorCount[$creatorKey] ?? 0) + 1;
-            }
+    
+        // Fetch personnel based on the selected structure
+        if ($selectedStructure !== 'ALL') {
+            $personnels = $personnelRepository->findBy(['structureRech' => $selectedStructure]);
+        } else {
+            $personnels = $personnelRepository->findAll();
         }
-
-        // Only add personnel with publications
-        if ($publicationCount > 0) {
-            $personnelContributions[] = [
-                'id' => $personnel->getId(),
-                'nom' => $personnel->getNom(),
-                'prenom' => $personnel->getPrenom(),
-                'publicationCount' => $publicationCount,
-            ];
-        }
-    }
-
-    // Prepare the statistics array
-    $statistics = [
-        'totalPublications' => $totalPublications,
-        'publicationTypes' => $publicationTypes,
-        'publicationTrends' => array_filter($publicationTrends),
-        'personnelContributions' => $personnelContributions,
-        'creatorCount' => $creatorCount,  // Include creator count in statistics
-    ];
-
-    return $this->render('personnel/statistics.html.twig', [
-        'statistics' => $statistics,
-        'selectedYear' => $selectedYear,
-        'selectedStructure' => $selectedStructure,
-        'structures' => $structureChoices,
-    ]);
-}
-        
-        
-        
-
-
-
-
-
-
-
-        
-        
-        #[Route('/publication-type/{type}', name: 'publication_type_details')]
-        public function publicationTypeDetails(
-            string $type,
-            Request $request,
-            PublicationRepository $publicationRepository,
-            PersonnelRepository $personnelRepository,
-            EntityManagerInterface $entityManager
-        ): Response {
-            // Get filters from the request
-            $selectedYear = $request->query->get('year', 'ALL');
-            $selectedStructure = $request->query->get('structure', 'ALL');
-        
-            // Get structure name (if a specific structure is selected)
-            $structureName = 'Toutes les Structures';
-            if ($selectedStructure !== 'ALL') {
-                $structure = $entityManager->getRepository(StructRech::class)->find($selectedStructure);
-                if ($structure) {
-                    $structureName = $structure->getLibelleStructure();
-                }
-            }
-        
-            // Get all publications of the selected type
-            $publications = $publicationRepository->findBy(['aggregationType' => $type]);
-        
-            // Apply year filter
-            if ($selectedYear !== 'ALL') {
-                $publications = array_filter($publications, function($publication) use ($selectedYear) {
-                    return substr($publication->getCoverDate(), 0, 4) == $selectedYear;
-                });
-            }
-        
-            // Apply structure filter
-            if ($selectedStructure !== 'ALL') {
-                $publications = array_filter($publications, function($publication) use ($personnelRepository, $selectedStructure) {
-                    $personnel = $publication->getPersonnel();
-                    return $personnel && $personnel->getStructureRech() && $personnel->getStructureRech()->getId() == $selectedStructure;
-                });
-            }
-        
-            // Calculate personnel contributions (number of publications per personnel)
-            $personnelCounts = [];
-            foreach ($publications as $publication) {
-                $personnel = $publication->getPersonnel();
-                if ($personnel) {
-                    $personnelName = $personnel->getNom() . ' ' . $personnel->getPrenom();
-                    if (isset($personnelCounts[$personnelName])) {
-                        $personnelCounts[$personnelName]++;
-                    } else {
-                        $personnelCounts[$personnelName] = 1;
-                    }
-                }
-            }
-        
-            // Calculate total number of publications and personnel
-            $totalPublications = count($publications);
-            $totalPersonnel = count($personnelCounts);
-        
-            // Prepare data for personnel contribution chart
-            $personnelCountsData = json_encode($personnelCounts);
-        
-            // 📊 Calculate Yearly Trends Data
-            $publicationTrends = [];
-            foreach ($publications as $publication) {
-                $year = substr($publication->getCoverDate(), 0, 4);
-                if (isset($publicationTrends[$year])) {
-                    $publicationTrends[$year]++;
-                } else {
-                    $publicationTrends[$year] = 1;
-                }
-            }
-            ksort($publicationTrends); // Sort by year (ascending order)
-            
-            // Pass data as "statistics" to the template
-            $statistics = [
-                'publicationTrends' => $publicationTrends
-            ];
-        
-            // Render the template with the data
-            return $this->render('personnel/type_details.html.twig', [
-                'type' => $type,
-                'publications' => $publications,
-                'selectedYear' => $selectedYear,
-                'selectedStructure' => $selectedStructure,
-                'structureName' => $structureName,
-                'personnelCounts' => $personnelCountsData,
-                'totalPublications' => $totalPublications,
-                'totalPersonnel' => $totalPersonnel,
-                'statistics' => $statistics, // ✅ Pass statistics containing "publicationTrends"
+    
+        $totalPublications = 0;
+        $publicationTypes = [];
+        $publicationTrends = array_fill_keys(range(1990, 2025), 0);
+        $personnelContributions = [];
+        $creatorCount = [];
+    
+        // Loop through each personnel to gather data
+        foreach ($personnels as $personnel) {
+            $publications = $publicationRepository->findBy([
+                'personnel' => $personnel,
+                'status' => 'validée'
             ]);
-        }
-
-        
-
-
-
-
-
-
-
-
-        #[Route('/import-auth-abstract-infos', name: 'import_auth_abstract_infos', methods: ['GET', 'POST'])]
-        public function importAuthAbstractInfos(
-            Request $request,
-            EntityManagerInterface $entityManager,
-            PublicationRepository $publicationRepository
-        ): Response {
-            if ($request->isMethod('POST')) {
-                $file = $request->files->get('excel_file');
-                if ($file) {
-                    try {
-                        $spreadsheet = IOFactory::load($file->getPathname());
-                        $worksheet = $spreadsheet->getActiveSheet();
-                        $rows = $worksheet->toArray();
-                        array_shift($rows); // Remove header row
-        
-                        $processed = 0;
-                        $skipped = 0;
-                        $unmatchedTitles = []; // Collect unmatched titles here
-                        $errors = []; // Collect errors here
-                        $batchSize = 20;
-        
-                        foreach ($rows as $index => $row) { // Iterate over $rows
-                            try {
-                                // Handle row processing logic here...
-        
-                                $excelTitle = trim($row[3] ?? ''); // Title column
-                                $authorNames = explode(';', trim($row[1] ?? '')); // Author full names column
-        
-                                // Process author names to remove commas and Scopus IDs
-                                $processedAuthorNames = array_map(function ($author) {
-                                    return trim(preg_replace('/\s*\(.*?\)/', '', str_replace(',', '', $author)));
-                                }, $authorNames);
-        
-                                $authorIds = explode(';', trim($row[2] ?? '')); // Author(s) ID column
-                                $abstract = trim($row[17] ?? ''); // Abstract column
-                                $organization = trim($row[15] ?? ''); // Affiliations column
-        
-                                if (empty($excelTitle)) {
-                                    $skipped++;
-                                    continue; // Skip rows with empty titles
-                                }
-        
-                                // Find publication by title
-                                $publication = $publicationRepository->findOneBy(['title' => $excelTitle]);
-                                if (!$publication) {
-                                    $unmatchedTitles[] = $excelTitle; // Add to unmatched titles
-                                    $skipped++;
-                                    continue;
-                                }
-        
-                                // Update the publication fields
-                                $publication->setAuthorNames($processedAuthorNames); // Use processed names
-                                $publication->setAuthorIds($authorIds);
-                                $publication->setAbstract($abstract);
-                                $publication->setOrganization($organization);
-        
-                                // Set the new fields from the Excel columns (E-L)
-                                $publication->setYear($row[4] ?? 'N/A'); // Year
-                                $publication->setSourceTitle($row[5] ?? 'N/A'); // Source Title
-                                $publication->setVolume($row[6] ?? 'N/A'); // Volume
-                                $publication->setIssue($row[7] ?? 'N/A'); // Issue
-                                $publication->setArtNo($row[8] ?? 'N/A'); // Art. No. (Using DOI as placeholder)
-                                $publication->setPageStart($row[9] ?? 'N/A'); // Page Start
-                                $publication->setPageEnd($row[10] ?? 'N/A'); // Page End
-                                $publication->setPageCount($row[11] ?? '0'); // Page Count
-        
-                                // Truncate the organization name if it exceeds 255 characters
-                                $organization = substr($organization, 0, 255); // Truncate to fit database limit
-                                $publication->setOrganization($organization);
-        
-                                // Persist the publication
-                                $entityManager->persist($publication);
-                                $processed++;
-        
-                                // Flush in batches
-                                if (($processed % $batchSize) === 0) {
-                                    try {
-                                        $entityManager->flush();
-                                        $entityManager->clear();  // Clear the EntityManager to free memory
-                                    } catch (\Exception $e) {
-                                        $errors[] = "Error during batch processing: " . $e->getMessage();
-                                        $entityManager->clear(); // Clear to keep going
-                                    }
-                                }
-                            } catch (\Exception $e) {
-                                $errors[] = "Error processing row $index: " . $e->getMessage();
-                            }
-                        }
-        
-                        // Flush any remaining entities
-                        try {
-                            $entityManager->flush();
-                            $entityManager->clear();
-                        } catch (\Exception $e) {
-                            $errors[] = "Error during final flush: " . $e->getMessage();
-                        }
-        
-                        // Add success message
-                        $this->addFlash('success', "$processed publications updated successfully.");
-        
-                        // Report unmatched titles (grouped together)
-                        if (!empty($unmatchedTitles)) {
-                            $this->addFlash(
-                                'warning',
-                                count($unmatchedTitles) . " unmatched titles: <br>" . implode('<br>', array_slice($unmatchedTitles, 0, 10)) .
-                                (count($unmatchedTitles) > 10 ? "<br>...and more" : "")
-                            );
-                        }
-        
-                        // Report errors (if any)
-                        if (!empty($errors)) {
-                            $this->addFlash(
-                                'error',
-                                "Errors occurred during processing: <br>" . implode('<br>', array_slice($errors, 0, 10)) .
-                                (count($errors) > 10 ? "<br>...and more" : "")
-                            );
-                        }
-                    } catch (\Exception $e) {
-                        $this->addFlash('error', 'Error processing the file: ' . $e->getMessage());
-                    }
-                } else {
-                    $this->addFlash('error', 'No file uploaded.');
-                }
-        
-                return $this->redirectToRoute('import_auth_abstract_infos');
-            }
-        
-            return $this->render('personnel/import_auth_abstract_infos.html.twig');
-        }
-        
-
-
-        #[Route('/personnel/{id}/details', name: 'personnel_details')]
-        public function personnelDetails(
-            int $id,
-            Request $request,
-            PersonnelRepository $personnelRepository,
-            PublicationRepository $publicationRepository,
-            EntityManagerInterface $entityManager
-        ): Response {
-            $personnel = $personnelRepository->find($id);
-        
-            if (!$personnel) {
-                throw $this->createNotFoundException('Personnel not found.');
-            }
-        
-            // Get the filters from the query parameters
-            $selectedYear = $request->query->get('year', 'ALL');
-            $selectedStructure = $request->query->get('structure', 'ALL');
-            $selectedType = $request->query->get('type', 'ALL');
-            $roleFilter = $request->query->get('roleFilter', 'collaborator'); // New filter
-        
-            // Default structure name
-            $structureName = 'Toutes les Structures'; 
-            if ($selectedStructure !== 'ALL') {
-                $structure = $entityManager->getRepository(StructRech::class)->find($selectedStructure);
-                if ($structure) {
-                    $structureName = $structure->getLibelleStructure();
-                }
-            }
-        
-            // Fetch all publications first
-            $publications = $publicationRepository->findAll();
-        
-            // Filter publications by status "validée"
-            $publications = array_filter($publications, function ($publication) {
-                return $publication->getStatus() === 'validée';
-            });
-        
-            // Filter publications based on the role
-            if ($roleFilter === 'creator') {
-                $publications = array_filter($publications, function ($publication) use ($personnel) {
-                    // Retrieve the last name of the personnel
-                    $personnelLastName = strtolower(trim($personnel->getNom()));
-        
-                    // Compare it with the creator field in the publication
-                    return strpos(strtolower(trim($publication->getCreator())), $personnelLastName) !== false;
-                });
-            } elseif ($roleFilter === 'collaborator') {
-                // For collaborator, simply fetch publications based on personnel's ID
-                $publications = array_filter($publications, function ($publication) use ($personnel) {
-                    return $publication->getPersonnel()->getId() === $personnel->getId();
-                });
-            }
-        
-            // Filter by year if selected
+    
             if ($selectedYear !== 'ALL') {
                 $publications = array_filter($publications, function ($publication) use ($selectedYear) {
                     return substr($publication->getCoverDate(), 0, 4) == $selectedYear;
                 });
             }
-        
-            // Filter by structure if selected
-            if ($selectedStructure !== 'ALL') {
-                $publications = array_filter($publications, function ($publication) use ($selectedStructure) {
-                    return $publication->getPersonnel()->getStructureRech()->getId() == $selectedStructure;
-                });
-            }
-        
-            // Filter by type if selected
-            if ($selectedType !== 'ALL') {
-                $publications = array_filter($publications, function ($publication) use ($selectedType) {
-                    return $publication->getAggregationType() == $selectedType;
-                });
-            }
-        
-            // Prepare statistics for display
-            $publicationTypes = [];
-            $publicationTrends = array_fill_keys(range(1990, 2025), 0);
-        
+    
+            $publicationCount = count($publications);
+            $totalPublications += $publicationCount;
+    
+            // Loop through publications for stats
             foreach ($publications as $publication) {
-                // Count publication types
                 $type = $publication->getAggregationType() ?? 'Other';
                 $publicationTypes[$type] = ($publicationTypes[$type] ?? 0) + 1;
-        
-                // Count publication trends per year
+    
                 $year = substr($publication->getCoverDate(), 0, 4);
-                if (isset($publicationTrends[$year])) {
+                if ($selectedYear === 'ALL' && isset($publicationTrends[$year])) {
                     $publicationTrends[$year]++;
                 }
+    
+                // Count occurrences of the creator
+                $creatorName = explode(" ", $publication->getCreator())[0]; // Extract the first word (creator's first name)
+                $creator = $personnelRepository->findOneBy(['nom' => strtoupper($creatorName)]); // Match with 'nom' in the Personnel table
+    
+                if ($creator) {
+                    $creatorKey = $creator->getNom() . ' ' . $creator->getPrenom();
+                    $creatorCount[$creatorKey] = ($creatorCount[$creatorKey] ?? 0) + 1;
+                }
             }
-        
-            // Count publications per personnel
-            $personnelCounts = [];
-            foreach ($publications as $publication) {
-                $personnelName = $publication->getPersonnel()->getNom() . ' ' . $publication->getPersonnel()->getPrenom();
+    
+            // Only add personnel with publications
+            if ($publicationCount > 0) {
+                $personnelContributions[] = [
+                    'id' => $personnel->getId(),
+                    'nom' => $personnel->getNom(),
+                    'prenom' => $personnel->getPrenom(),
+                    'publicationCount' => $publicationCount,
+                ];
+            }
+        }
+    
+        // Prepare the statistics array
+        $statistics = [
+            'totalPublications' => $totalPublications,
+            'publicationTypes' => $publicationTypes,
+            'publicationTrends' => array_filter($publicationTrends),
+            'personnelContributions' => $personnelContributions,
+            'creatorCount' => $creatorCount,  // Include creator count in statistics
+        ];
+    
+        return $this->render('personnel/statistics.html.twig', [
+            'statistics' => $statistics,
+            'selectedYear' => $selectedYear,
+            'selectedStructure' => $selectedStructure,
+            'structures' => $structureChoices,
+        ]);
+    }
+    
+
+
+
+    #[Route('/personnel/{id}/details', name: 'personnel_details')]
+    public function personnelDetails(
+        int $id,
+        Request $request,
+        PersonnelRepository $personnelRepository,
+        PublicationRepository $publicationRepository,
+        EntityManagerInterface $entityManager
+    ): Response {
+        $personnel = $personnelRepository->find($id);
+    
+        if (!$personnel) {
+            throw $this->createNotFoundException('Personnel not found.');
+        }
+    
+        // Get the filters from the query parameters
+        $selectedYear = $request->query->get('year', 'ALL');
+        $selectedStructure = $request->query->get('structure', 'ALL');
+        $selectedType = $request->query->get('type', 'ALL');
+        $roleFilter = $request->query->get('roleFilter', 'collaborator'); // New filter
+    
+        // Default structure name
+        $structureName = 'Toutes les Structures'; 
+        if ($selectedStructure !== 'ALL') {
+            $structure = $entityManager->getRepository(StructRech::class)->find($selectedStructure);
+            if ($structure) {
+                $structureName = $structure->getLibelleStructure();
+            }
+        }
+    
+        // Fetch all publications first
+        $publications = $publicationRepository->findAll();
+    
+        // Filter publications by status "validée"
+        $publications = array_filter($publications, function ($publication) {
+            return $publication->getStatus() === 'validée';
+        });
+    
+        // Filter publications based on the role
+        if ($roleFilter === 'creator') {
+            $publications = array_filter($publications, function ($publication) use ($personnel) {
+                // Retrieve the last name of the personnel
+                $personnelLastName = strtolower(trim($personnel->getNom()));
+    
+                // Compare it with the creator field in the publication
+                return strpos(strtolower(trim($publication->getCreator())), $personnelLastName) !== false;
+            });
+        } elseif ($roleFilter === 'collaborator') {
+            // For collaborator, simply fetch publications based on personnel's ID
+            $publications = array_filter($publications, function ($publication) use ($personnel) {
+                return $publication->getPersonnel()->getId() === $personnel->getId();
+            });
+        }
+    
+        // Filter by year if selected
+        if ($selectedYear !== 'ALL') {
+            $publications = array_filter($publications, function ($publication) use ($selectedYear) {
+                return substr($publication->getCoverDate(), 0, 4) == $selectedYear;
+            });
+        }
+    
+        // Filter by structure if selected
+        if ($selectedStructure !== 'ALL') {
+            $publications = array_filter($publications, function ($publication) use ($selectedStructure) {
+                return $publication->getPersonnel()->getStructureRech()->getId() == $selectedStructure;
+            });
+        }
+    
+        // Filter by type if selected
+        if ($selectedType !== 'ALL') {
+            $publications = array_filter($publications, function ($publication) use ($selectedType) {
+                return $publication->getAggregationType() == $selectedType;
+            });
+        }
+    
+        // Prepare statistics for display
+        $publicationTypes = [];
+        $publicationTrends = array_fill_keys(range(1990, 2025), 0);
+    
+        foreach ($publications as $publication) {
+            // Count publication types
+            $type = $publication->getAggregationType() ?? 'Other';
+            $publicationTypes[$type] = ($publicationTypes[$type] ?? 0) + 1;
+    
+            // Count publication trends per year
+            $year = substr($publication->getCoverDate(), 0, 4);
+            if (isset($publicationTrends[$year])) {
+                $publicationTrends[$year]++;
+            }
+        }
+    
+        // Count publications per personnel
+        $personnelCounts = [];
+        foreach ($publications as $publication) {
+            $personnelName = $publication->getPersonnel()->getNom() . ' ' . $publication->getPersonnel()->getPrenom();
+            if (isset($personnelCounts[$personnelName])) {
+                $personnelCounts[$personnelName]++;
+            } else {
+                $personnelCounts[$personnelName] = 1;
+            }
+        }
+    
+        // Prepare data for Twig rendering
+        $statistics = [
+            'publicationTypes' => $publicationTypes,
+            'publicationTrends' => $publicationTrends,
+            'personnelCounts' => $personnelCounts,
+        ];
+    
+        // Get available years and types for filters
+        $availableYears = array_unique(array_map(function ($publication) {
+            return substr($publication->getCoverDate(), 0, 4);
+        }, $publications));
+    
+        $availableTypes = array_unique(array_map(function ($publication) {
+            return $publication->getAggregationType() ?? 'Other';
+        }, $publications));
+    
+        // Render the view with the data
+        return $this->render('personnel/details.html.twig', [
+            'personnel' => $personnel,
+            'publications' => $publications,
+            'selectedYear' => $selectedYear,
+            'selectedStructure' => $selectedStructure,
+            'structureName' => $structureName,
+            'selectedType' => $selectedType,
+            'roleFilter' => $roleFilter, // Pass the new filter to Twig
+            'statistics' => $statistics,
+            'availableYears' => $availableYears,
+            'availableTypes' => $availableTypes,
+        ]);
+    }
+
+
+
+
+    #[Route('/publication-type/{type}', name: 'publication_type_details')]
+    public function publicationTypeDetails(
+        string $type,
+        Request $request,
+        PublicationRepository $publicationRepository,
+        PersonnelRepository $personnelRepository,
+        EntityManagerInterface $entityManager
+    ): Response {
+        // Get filters from the request
+        $selectedYear = $request->query->get('year', 'ALL');
+        $selectedStructure = $request->query->get('structure', 'ALL');
+    
+        // Get structure name (if a specific structure is selected)
+        $structureName = 'Toutes les Structures';
+        if ($selectedStructure !== 'ALL') {
+            $structure = $entityManager->getRepository(StructRech::class)->find($selectedStructure);
+            if ($structure) {
+                $structureName = $structure->getLibelleStructure();
+            }
+        }
+    
+        // Get all publications of the selected type
+        $publications = $publicationRepository->findBy(['aggregationType' => $type]);
+    
+        // Apply year filter
+        if ($selectedYear !== 'ALL') {
+            $publications = array_filter($publications, function($publication) use ($selectedYear) {
+                return substr($publication->getCoverDate(), 0, 4) == $selectedYear;
+            });
+        }
+    
+        // Apply structure filter
+        if ($selectedStructure !== 'ALL') {
+            $publications = array_filter($publications, function($publication) use ($personnelRepository, $selectedStructure) {
+                $personnel = $publication->getPersonnel();
+                return $personnel && $personnel->getStructureRech() && $personnel->getStructureRech()->getId() == $selectedStructure;
+            });
+        }
+    
+        // Calculate personnel contributions (number of publications per personnel)
+        $personnelCounts = [];
+        foreach ($publications as $publication) {
+            $personnel = $publication->getPersonnel();
+            if ($personnel) {
+                $personnelName = $personnel->getNom() . ' ' . $personnel->getPrenom();
                 if (isset($personnelCounts[$personnelName])) {
                     $personnelCounts[$personnelName]++;
                 } else {
                     $personnelCounts[$personnelName] = 1;
                 }
             }
-        
-            // Prepare data for Twig rendering
-            $statistics = [
-                'publicationTypes' => $publicationTypes,
-                'publicationTrends' => $publicationTrends,
-                'personnelCounts' => $personnelCounts,
-            ];
-        
-            // Get available years and types for filters
-            $availableYears = array_unique(array_map(function ($publication) {
-                return substr($publication->getCoverDate(), 0, 4);
-            }, $publications));
-        
-            $availableTypes = array_unique(array_map(function ($publication) {
-                return $publication->getAggregationType() ?? 'Other';
-            }, $publications));
-        
-            // Render the view with the data
-            return $this->render('personnel/details.html.twig', [
-                'personnel' => $personnel,
-                'publications' => $publications,
-                'selectedYear' => $selectedYear,
-                'selectedStructure' => $selectedStructure,
-                'structureName' => $structureName,
-                'selectedType' => $selectedType,
-                'roleFilter' => $roleFilter, // Pass the new filter to Twig
-                'statistics' => $statistics,
-                'availableYears' => $availableYears,
-                'availableTypes' => $availableTypes,
-            ]);
         }
+    
+        // Calculate total number of publications and personnel
+        $totalPublications = count($publications);
+        $totalPersonnel = count($personnelCounts);
+    
+        // Prepare data for personnel contribution chart
+        $personnelCountsData = json_encode($personnelCounts);
+    
+        // 📊 Calculate Yearly Trends Data
+        $publicationTrends = [];
+        foreach ($publications as $publication) {
+            $year = substr($publication->getCoverDate(), 0, 4);
+            if (isset($publicationTrends[$year])) {
+                $publicationTrends[$year]++;
+            } else {
+                $publicationTrends[$year] = 1;
+            }
+        }
+        ksort($publicationTrends); // Sort by year (ascending order)
         
-                
+        // Pass data as "statistics" to the template
+        $statistics = [
+            'publicationTrends' => $publicationTrends
+        ];
+    
+        // Render the template with the data
+        return $this->render('personnel/type_details.html.twig', [
+            'type' => $type,
+            'publications' => $publications,
+            'selectedYear' => $selectedYear,
+            'selectedStructure' => $selectedStructure,
+            'structureName' => $structureName,
+            'personnelCounts' => $personnelCountsData,
+            'totalPublications' => $totalPublications,
+            'totalPersonnel' => $totalPersonnel,
+            'statistics' => $statistics, // ✅ Pass statistics containing "publicationTrends"
+        ]);
+    }
 
 
 
-
-        
         /**
  * @Route("/personnel/{id}/add-publication", name="add_publication")
  */
@@ -1427,15 +1315,7 @@ public function addPublication(int $id, PersonnelRepository $personnelRepository
 
 
 
-
-
-
-
-
-
-
-
-/**
+ /**
  * @Route("/personnel/{id}/submit-publication", name="submit_publication", methods={"POST"})
  */
 public function submitPublication(
@@ -1489,16 +1369,6 @@ public function submitPublication(
 
 
 
-
-
-
-
-
-
-
-
-
-
 /**
  * @Route("/personnel/{id}/requests", name="personnel_requests")
  */
@@ -1525,15 +1395,6 @@ public function personnelRequests(
         'publications' => $publications,  // Display only the requested publications
     ]);
 }
-
-
-
-
-
-
-
-
-
 
 
 #[Route('/manage-publication-requests', name: 'manage_publication_requests')]
@@ -1612,6 +1473,18 @@ public function rejectPublication(
 }
 
 
-
-
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
