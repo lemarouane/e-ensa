@@ -1,0 +1,389 @@
+{% extends 'template.html.twig' %}
+
+{% block title %}
+    Détails des Publications - {{ type }}
+{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <!-- DataTable Styles -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.1/css/jquery.dataTables.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.4.0/css/responsive.dataTables.min.css">
+    <style>
+        .chart-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 400px;
+            padding: 20px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .chart-title {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #333;
+            text-align: center;
+        }
+
+        .table-container {
+            margin-bottom: 40px;
+        }
+
+        .chart-wrapper {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* DataTable Styling */
+        #publicationTable thead th {
+            background-color: #ff6632;
+            color: white;
+            text-align: center;
+        }
+
+        #publicationTable tbody tr:hover {
+            background-color: #f9f9f9;
+            cursor: pointer;
+        }
+
+        #publicationTable td, #publicationTable th {
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .dataTables_filter {
+            margin-bottom: 20px !important;
+        }
+
+        /* Style the View Icon */
+        .view-details-icon {
+            font-size: 1.3rem;
+            color: #007bff;
+            cursor: pointer;
+            transition: color 0.3s ease, transform 0.2s ease;
+        }
+
+ 
+
+        /* Improve the View Button */
+        .view-details-btn {
+            transition: all 0.3s ease-in-out;
+            border-radius: 6px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px;
+            background: none;
+            border: none;
+        }
+
+ 
+
+ 
+
+        /* Modernize the Modal */
+        .custom-modal {
+            border-radius: 12px;
+            box-shadow: 0px 10px 30px rgba(0, 0, 0, 0.3);
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        /* Add Animation */
+        @keyframes fadeIn {
+            from {
+                transform: translateY(-10px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        /* Maintain DataTable Colors */
+        .custom-table th {
+            background: #ff6632;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+
+        .custom-table td {
+            padding: 10px;
+        }
+
+        .custom-table tr:nth-child(odd) {
+            background: #f1f1f1;
+        }
+/* Center the View Icon in the DataTable Cell */
+#publicationTable td:last-child {
+    text-align: center;
+    vertical-align: middle;
+    padding: 0; /* Remove default padding to ensure proper centering */
+}
+
+#publicationTable td:last-child .view-details-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+        
+    </style>
+{% endblock %}
+
+{% block body %}
+<div class="statistics-container">
+    <!-- Publications Table -->
+    <div class="card">
+    
+        <div class="card-body">
+            <div class="table-container">
+                <h3 class="chart-title">
+                    Détails des Publications - {{ type }} ({{ selectedYear != 'ALL' ? 'Année: ' ~ selectedYear : 'Toutes les Années' }}, {{ structureName }})
+                </h3>
+                    <div class="row">
+        <!-- Personnel Contribution Pie Chart -->
+        <div class="{% if selectedYear == 'ALL' %}col-lg-6{% else %}col-lg-12{% endif %} col-md-12 mb-4">
+            <div class="card shadow-lg">
+                <div class="card-body text-center">
+                    <h5 class="chart-title">Contribution des Personnels</h5>
+                    <hr>
+                    <div class="chart-container">
+                        <div id="chart4" class="chart-wrapper"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if selectedYear == 'ALL' %}
+        <!-- Yearly Trends Chart (Only When "ALL" is Selected) -->
+        <div class="col-lg-6 col-md-12 mb-4">
+            <div class="card shadow-lg">
+                <div class="card-body text-center">
+                    <h5 class="chart-title">Tendances des Publications par Année</h5>
+                    <hr>
+                    <div class="chart-container">
+                        <div id="publicationTrendsChart" class="chart-wrapper"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+                <table id="publicationTable" class="table table-bordered table-striped">
+                    <thead>
+                        <tr>
+                            <th>Titre</th>
+                            <th>Auteur(s)</th>
+                            <th>Date</th>
+                            <th>Éditeur</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for publication in publications %}
+                            <tr>
+                                <td>{{ publication.title|default('N/A') }}</td>
+                                <td>{{ publication.authorNames|join(', ')|default('N/A') }}</td>
+                                <td>{{ publication.coverDate|default('N/A') }}</td>
+                                <td>{{ publication.publisher|default('N/A') }}</td>
+                                <td>
+                                    <button class="btn btn-outline-primary btn-sm view-details-btn px-3"
+                                            data-bs-toggle="modal" data-bs-target="#publicationDetailsModal"
+                                            data-publication='{{ {
+                                                "ID": publication.id|default('N/A'),
+                                                "Titre": publication.title|default('N/A'),
+                                                "Auteurs": publication.authorNames|join(', ')|default('N/A'),
+                                                "Nom de la Publication": publication.publicationName|default('N/A'),
+                                                "Éditeur": publication.publisher|default('N/A'),
+                                                "Abstract": publication.abstract|default('N/A'),
+                                                "Année": publication.year|default('N/A'),
+                                                "Date de Couverture": publication.coverDate|default('N/A'),
+                                                "Volume": publication.volume|default('N/A'),
+                                                "Issue": publication.issue|default('N/A'),
+                                                "Type de Publication": publication.aggregationType|default('N/A'),
+                                                "Source": publication.sourceTitle|default('N/A'),
+                                                "DOI": publication.artNo|default('N/A'),
+                                                "Page Début": publication.pageStart|default('N/A'),
+                                                "Page Fin": publication.pageEnd|default('N/A'),
+                                                "Nombre de Pages": publication.pageCount|default('N/A'),
+                                                "Organisation": publication.organization|default('N/A'),
+                                                "Créateur": publication.creator|default('N/A')
+                                            }|json_encode(constant('JSON_HEX_TAG') b-or constant('JSON_HEX_APOS') b-or constant('JSON_HEX_QUOT') b-or constant('JSON_HEX_AMP') b-or constant('JSON_UNESCAPED_UNICODE'))|e }}'>
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center">Aucune publication trouvée pour ce type.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+ 
+</div>
+
+<!-- Modal for Publication Details -->
+<div class="modal fade" id="publicationDetailsModal" tabindex="-1" aria-labelledby="publicationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content custom-modal">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold text-primary">
+                    <i class="fas fa-book-open me-2"></i> Plus d'informations sur cette Publication.
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <table class="table table-hover custom-table">
+                    <tbody id="modalContent"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <!-- DataTable JS and dependencies -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.1/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.4.0/js/dataTables.responsive.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            $('#publicationTable').DataTable({
+                language: { url: '//cdn.datatables.net/plug-ins/1.13.1/i18n/fr-FR.json' },
+                responsive: true,
+                autoWidth: false,
+                pagingType: "full_numbers",
+                pageLength: 10,
+                lengthMenu: [10, 25, 50, 100],
+            });
+
+            // 📊 Personnel Contribution Pie Chart
+            var personnelCounts = {{ personnelCounts|raw }};
+            var labels = Object.keys(personnelCounts);
+            var data = Object.values(personnelCounts);
+
+            var personnelChart = new ApexCharts(document.querySelector("#chart4"), {
+                chart: {
+                    type: 'pie',
+                    height: 400,
+                    width: "100%"
+                },
+                series: data,
+                labels: labels,
+                plotOptions: {
+                    pie: {
+                        donut: { size: '65%' },
+                        dataLabels: { enabled: true }
+                    }
+                },
+                tooltip: { y: { formatter: (val) => `${val} publications` } }
+            });
+            personnelChart.render();
+
+            // 📈 Yearly Trends Chart (Only if "ALL" Years is Selected)
+            {% if selectedYear == 'ALL' %}
+            var trendsData = {{ statistics.publicationTrends|json_encode|raw }};
+            var years = Object.keys(trendsData);
+            var values = Object.values(trendsData);
+
+            if (years.length > 0) {
+                var publicationTrendsChart = new ApexCharts(document.querySelector("#publicationTrendsChart"), {
+                    chart: {
+                        type: 'area',
+                        height: 400,
+                        width: "100%",
+                        toolbar: { show: false },
+                        animations: { enabled: true, easing: 'easeinout', speed: 800 }
+                    },
+                    series: [{ name: "Publications", data: values }],
+                    xaxis: {
+                        categories: years,
+                        title: { text: "Année" },
+                        labels: { style: { colors: '#666', fontSize: '12px' } }
+                    },
+                    yaxis: {
+                        title: { text: "Nombre de Publications" },
+                        min: 0,
+                        labels: { style: { colors: '#666', fontSize: '12px' } }
+                    },
+                    markers: {
+                        size: 6,
+                        colors: ["#FF6632"],
+                        strokeColors: "#fff",
+                        strokeWidth: 2,
+                        hover: { size: 9 }
+                    },
+                    colors: ["#FF6632"],
+                    stroke: { curve: 'smooth', width: 3 },
+                    fill: {
+                        type: 'gradient',
+                        gradient: {
+                            shade: 'light',
+                            type: "vertical",
+                            shadeIntensity: 0.3,
+                            gradientToColors: ['#FFA07A'],
+                            inverseColors: false,
+                            opacityFrom: 0.8,
+                            opacityTo: 0.3,
+                        }
+                    },
+                    tooltip: {
+                        theme: "dark",
+                        x: { show: true },
+                        y: { formatter: (val) => `${val} publications` }
+                    },
+                    grid: {
+                        borderColor: "#f1f1f1",
+                        strokeDashArray: 5,
+                    }
+                });
+
+                publicationTrendsChart.render();
+            }
+            {% endif %}
+        });
+
+        document.addEventListener('DOMContentLoaded', function () {
+            $('.view-details-btn').on('click', function () {
+                let publicationData = $(this).attr('data-publication');
+
+                if (!publicationData) {
+                    console.error("No publication data found!");
+                    return;
+                }
+
+                try {
+                    let publication = JSON.parse(publicationData);
+                    let modalContent = $('#modalContent');
+                    modalContent.empty(); // Clear previous data
+
+                    Object.entries(publication).forEach(([key, value]) => {
+                        if (Array.isArray(value)) {
+                            value = value.join(', ');
+                        }
+                        if (value === null || value === '') {
+                            value = 'N/A';
+                        }
+                        modalContent.append(`<tr><th>${key}</th><td>${value}</td></tr>`);
+                    });
+                } catch (e) {
+                    console.error("Error parsing JSON:", e);
+                }
+            });
+        });
+    </script>
+{% endblock %}

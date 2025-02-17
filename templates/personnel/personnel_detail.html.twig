@@ -1,0 +1,97 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Détails de {{ personnel.nom }} {{ personnel.prenom }}{% endblock %}
+
+{% block body %}
+<div class="container-fluid">
+    <h1 class="my-4">Détails de {{ personnel.nom }} {{ personnel.prenom }}</h1>
+
+    <!-- Basic Information -->
+    <div class="card shadow-lg mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Informations de base</h5>
+            <p class="card-text">
+                <strong>Nom:</strong> {{ personnel.nom }}<br>
+                <strong>Prénom:</strong> {{ personnel.prenom }}<br>
+                <strong>Email:</strong> {{ personnel.email }}<br>
+                <strong>Structure de recherche:</strong> {{ personnel.structureRech.libelleStructure }}<br>
+            </p>
+        </div>
+    </div>
+
+    <!-- Publications -->
+    <div class="card shadow-lg mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Publications</h5>
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Titre</th>
+                            <th>Type</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for publication in publications %}
+                            <tr>
+                                <td>{{ publication.title }}</td>
+                                <td>{{ publication.aggregationType }}</td>
+                                <td>{{ publication.coverDate }}</td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="3" class="text-muted">Aucune publication trouvée.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Graphs -->
+    <div class="card shadow-lg mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Statistiques des Publications</h5>
+            <div id="publicationTypesChart"></div>
+            <div id="publicationTrendsChart"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // 📊 Pie Chart - Publication Types
+            var publicationTypesData = {{ personnelData.publicationTypes|json_encode|raw }};
+            var labels = Object.keys(publicationTypesData);
+            var data = Object.values(publicationTypesData);
+
+            var publicationTypesChart = new ApexCharts(document.querySelector("#publicationTypesChart"), {
+                chart: { type: 'pie', height: 400 },
+                series: data,
+                labels: labels,
+                plotOptions: { pie: { donut: { size: '65%' } } },
+                tooltip: { y: { formatter: (val) => `${val} publications` } }
+            });
+            publicationTypesChart.render();
+
+            // 📈 Line Chart - Trends Over Years
+            var trendsData = {{ personnelData.publicationTrends|json_encode|raw }};
+            var years = Object.keys(trendsData);
+            var values = Object.values(trendsData);
+
+            var publicationTrendsChart = new ApexCharts(document.querySelector("#publicationTrendsChart"), {
+                chart: { type: 'line', height: 400 },
+                series: [{ name: "Publications", data: values }],
+                xaxis: { categories: years },
+                tooltip: { y: { formatter: (val) => `${val} publications` } }
+            });
+            publicationTrendsChart.render();
+        });
+    </script>
+{% endblock %}

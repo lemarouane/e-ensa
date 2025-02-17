@@ -1,0 +1,325 @@
+{% extends 'template.html.twig' %}
+
+{% block title %}Statistiques du Personnel{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.1/css/jquery.dataTables.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.4.0/css/responsive.dataTables.min.css">
+    <style>
+
+    .form-select {
+    appearance: none;
+    padding-right: 30px; /* Make space for arrow */
+    background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="gray" class="bi bi-caret-down-fill" viewBox="0 0 16 16"> <path d="M7.247 11.14 2.451 5.658a.5.5 0 0 1 .416-.82h10.266a.5.5 0 0 1 .416.82l-4.796 5.482a.5.5 0 0 1-.832 0z"/> </svg>')
+    no-repeat right 10px center;
+    background-size: 12px;
+}
+
+        .chart-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 400px; /* Unified height */
+            padding: 20px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .chart-title {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #333;
+            text-align: center;
+        }
+
+        .chart-wrapper {
+            width: 100%;
+            height: 100%;
+        }
+
+/* Ensure table has no black lines under rows and keeps spacing clean */
+#personnelTable {
+    width: 100%;
+    border-collapse: collapse; /* Removes default borders between rows */
+    border-spacing: 0; /* Ensures no gaps between table cells */
+}
+
+#personnelTable thead th {
+    background-color: #ff6632;
+    color: white;
+    text-align: center;
+    padding: 12px;
+    border: none;
+    letter-spacing: 0.5px; /* Tiny space between title cells */
+}
+
+/* Remove border under rows */
+#personnelTable tbody tr {
+    background: #fff;
+    border-bottom: none !important; /* Ensure no black line under rows */
+}
+
+/* Center content in all table cells */
+#personnelTable td, #personnelTable th {
+    text-align: center;
+    vertical-align: middle;
+    padding: 12px;
+}
+
+/* Add slight spacing between header cells */
+#personnelTable thead th:not(:last-child) {
+    padding-right: 10px;
+}
+
+/* Remove hover effect shadow */
+#personnelTable tbody tr:hover {
+    background-color: #f9f9f9;
+    box-shadow: none !important;
+}
+
+/* Remove all borders from table */
+#personnelTable td {
+    border: none !important; /* Ensure no unwanted black lines */
+}
+
+
+        .dataTables_filter {
+            margin-bottom: 20px !important;
+        }
+ 
+    </style>
+{% endblock %}
+
+{% block body %}
+<div class="page-breadcrumb d-none d-sm-flex align-items-center mb-3">
+    <div class="breadcrumb-title pe-3">Statistiques du Personnel</div>
+</div>
+
+<!-- Filters Form (Year & Structure) -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <form method="get" action="{{ path('personnel_statistics') }}">
+            <div class="input-group">
+                <!-- Year Filter -->
+                <div class="me-2">
+                    <select name="year" class="form-select" onchange="this.form.submit()">
+                        <option value="ALL" {% if selectedYear == 'ALL' %}selected{% endif %}>
+                            Toutes les Années
+                        </option>
+                        <option value="2022" {% if selectedYear == '2022' %}selected{% endif %}>2022</option>
+                        <option value="2023" {% if selectedYear == '2023' %}selected{% endif %}>2023</option>
+                        <option value="2024" {% if selectedYear == '2024' %}selected{% endif %}>2024</option>
+                        <option value="2025" {% if selectedYear == '2025' %}selected{% endif %}>2025</option>
+                    </select>
+                </div>
+
+                <!-- Structure Filter -->
+                <div>
+                    <select name="structure" class="form-select" onchange="this.form.submit()">
+                        <option value="ALL" {% if selectedStructure == 'ALL' %}selected{% endif %}>
+                            Toutes les Structures
+                        </option>
+                        {% for id, libelle in structures %}
+                            <option value="{{ id }}" {% if selectedStructure == id %}selected{% endif %}>
+                                {{ libelle }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+<!-- Total Publications -->
+<div class="alert alert-info text-center">
+    <h5>Total Publications: <strong>{{ statistics.totalPublications }}</strong></h5>
+</div>
+
+<div class="row">
+    <!-- Pie Chart (Publication Types) -->
+    <div class="{% if selectedYear == 'ALL' %}col-lg-6{% else %}col-lg-12{% endif %} col-md-12 mb-4">
+        <div class="card shadow-lg">
+            <div class="card-body text-center">
+                <h5 class="chart-title">Répartition des Types de Publications</h5>
+                <hr>
+                <div class="chart-container">
+                    <div id="publicationTypesChart" class="chart-wrapper"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if selectedYear == 'ALL' %}
+    <!-- Yearly Trends Chart (Only Visible When Year = ALL) -->
+    <div class="col-lg-6 col-md-12 mb-4" id="yearChartContainer">
+        <div class="card shadow-lg">
+            <div class="card-body text-center">
+                <h5 class="chart-title">Tendances des Publications par Année</h5>
+                <hr>
+                <div class="chart-container">
+                    <div id="publicationTrendsChart" class="chart-wrapper"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Personnel Contribution DataTable -->
+<div class="card shadow-lg">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table id="personnelTable" class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Nom et Prénom</th> <!-- Name column -->
+                        <th>Nombre total de publications</th> <!-- Publications Count -->
+                         <th>Actions</th> <!-- Actions column -->
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for person in statistics.personnelContributions %}
+                        <tr>
+                            <td>{{ person.nom }} {{ person.prenom }}</td>
+                            <td>{{ person.publicationCount }}</td>
+ 
+                            <td>
+                                <a href="{{ path('personnel_details', {id: person.id, year: selectedYear, structure: selectedStructure}) }}" class="btn btn-info">
+                                    <i class="fas fa-eye"></i> <!-- Eye icon for "View" action -->
+                                </a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.1/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.4.0/js/dataTables.responsive.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        $('#personnelTable').DataTable({
+            language: { url: '//cdn.datatables.net/plug-ins/1.13.1/i18n/fr-FR.json' },
+            responsive: true,
+            autoWidth: false,
+            pagingType: "full_numbers",
+            pageLength: 10,
+            lengthMenu: [10, 25, 50, 100],
+        });
+
+        // 📊 Pie Chart - Publication Types
+        var publicationTypesData = {{ statistics.publicationTypes|json_encode|raw }};
+        var labels = Object.keys(publicationTypesData);
+        var data = Object.values(publicationTypesData);
+
+        var publicationTypesChart = new ApexCharts(document.querySelector("#publicationTypesChart"), {
+            chart: {
+                type: 'pie',
+                height: 400,
+                events: {
+                    dataPointSelection: function(event, chartContext, config) {
+                        let selectedType = labels[config.dataPointIndex];
+                        let year = "{{ selectedYear }}";
+                        let structure = "{{ selectedStructure }}";
+
+                        let url = "{{ path('publication_type_details', { 'type': '__TYPE__' }) }}".replace('__TYPE__', encodeURIComponent(selectedType));
+                        let params = new URLSearchParams();
+                        if (year !== 'ALL') params.append('year', year);
+                        if (structure !== 'ALL') params.append('structure', structure);
+
+                        if (params.toString()) url += '?' + params.toString();
+                        window.location.href = url;
+                    }
+                }
+            },
+            series: data,
+            labels: labels,
+            plotOptions: {
+                pie: {
+                    donut: { size: '65%' },
+                    dataLabels: { enabled: true }
+                }
+            },
+            tooltip: { y: { formatter: (val) => `${val} publications` } }
+        });
+        publicationTypesChart.render();
+
+        // 📈 Enhanced Line Chart - Trends Over Years (Only if Year = ALL)
+        {% if selectedYear == 'ALL' %}
+        var trendsData = {{ statistics.publicationTrends|json_encode|raw }};
+        var years = Object.keys(trendsData);
+        var values = Object.values(trendsData);
+
+        if (years.length > 0) {
+            var publicationTrendsChart = new ApexCharts(document.querySelector("#publicationTrendsChart"), {
+                chart: {
+                    type: 'area',
+                    height: 400,
+                    toolbar: { show: false },
+                    animations: { enabled: true, easing: 'easeinout', speed: 800 }
+                },
+                series: [{ name: "Publications", data: values }],
+                xaxis: {
+                    categories: years,
+                    title: { text: "Année" },
+                    labels: { style: { colors: '#666', fontSize: '12px' } }
+                },
+                yaxis: {
+                    title: { text: "Nombre de Publications" },
+                    min: 0,
+                    labels: { style: { colors: '#666', fontSize: '12px' } }
+                },
+                markers: {
+                    size: 6,
+                    colors: ["#FF6632"],
+                    strokeColors: "#fff",
+                    strokeWidth: 2,
+                    hover: { size: 9 }
+                },
+                colors: ["#FF6632"],
+                stroke: { curve: 'smooth', width: 3 },
+                fill: {
+                    type: 'gradient',
+                    gradient: {
+                        shade: 'light',
+                        type: "vertical",
+                        shadeIntensity: 0.3,
+                        gradientToColors: ['#FFA07A'],
+                        inverseColors: false,
+                        opacityFrom: 0.8,
+                        opacityTo: 0.3,
+                    }
+                },
+                tooltip: {
+                    theme: "dark",
+                    x: { show: true },
+                    y: { formatter: (val) => `${val} publications` }
+                },
+                grid: {
+                    borderColor: "#f1f1f1",
+                    strokeDashArray: 5,
+                }
+            });
+            publicationTrendsChart.render();
+        }
+        {% endif %}
+    });
+</script>
+
+{% endblock %}
+
+

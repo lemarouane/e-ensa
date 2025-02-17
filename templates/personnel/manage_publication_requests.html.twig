@@ -1,0 +1,289 @@
+{% extends 'template.html.twig' %}
+
+{% block title %}
+    Gérer les Demandes de Publications
+{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.1/css/jquery.dataTables.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.4.0/css/responsive.dataTables.min.css">
+    <style>
+        .table-container {
+            margin-bottom: 40px;
+        }
+
+        #requestsTable thead th {
+            background-color: #ff6632;
+            color: white;
+            text-align: center;
+        }
+
+        #requestsTable td, #requestsTable th {
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .view-details-btn, .validate-btn, .reject-btn {
+            font-size: 1.3rem;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            border: none;
+            background: none;
+        }
+
+        .view-details-btn {
+            color: #007bff;
+        }
+
+        .validate-btn {
+            color: #28a745; /* Green color for the validate button */
+        }
+
+        .reject-btn {
+            color: #dc3545; /* Red color for the reject button */
+        }
+
+        .view-details-btn:hover, .validate-btn:hover, .reject-btn:hover {
+            transform: scale(1.1);
+        }
+    </style>
+{% endblock %}
+
+{% block body %}
+<div class="statistics-container">
+    <div class="card">
+        <div class="card-body">
+            <h4 class="publication-header">Demandes de Publications</h4>
+
+            <div class="table-container">
+                <table id="requestsTable" class="table table-bordered table-striped">
+                    <thead>
+                        <tr>
+                            <th>Demandeur</th>
+                            <th>Titre</th>
+                            <th>Créateur</th>
+                            <th>Source</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for publication in publications %}
+                            <tr>
+                                <td>{{ publication.personnelFullName|default('N/A') }}</td>
+                                <td>{{ publication.title|default('N/A') }}</td>
+                                <td>{{ publication.creator|default('N/A') }}</td>
+                                <td>{{ publication.sourceTitle|default('N/A') }}</td>
+                                <td>
+    <span class="badge {% if publication.status == 'validée' %}bg-success{% elseif publication.status starts with 'non validée' %}bg-danger{% else %}bg-warning{% endif %}">
+        {{ publication.status|default('N/A') }}
+    </span>
+</td>
+
+                                <td>
+                                    <!-- View Details Button -->
+                                    <button class="view-details-btn"
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#publicationDetailsModal"
+                                            data-publication='{{ {
+                                                "ID": publication.id|default('N/A'),
+                                                "Titre": publication.title|default('N/A'),
+                                                "Créateur": publication.creator|default('N/A'),
+                                                "Nom de la Publication": publication.publicationName|default('N/A'),
+                                                "Éditeur": publication.publisher|default('N/A'),
+                                                "Résumé": publication.abstract|default('N/A'),
+                                                "Année": publication.year|default('N/A'),
+                                                "Date de Couverture": publication.coverDate|default('N/A'),
+                                                "Volume": publication.volume|default('N/A'),
+                                                "Issue": publication.issue|default('N/A'),
+                                                "Type de Publication": publication.aggregationType|default('N/A'),
+                                                "Source": publication.sourceTitle|default('N/A'),
+                                                "DOI": publication.artNo|default('N/A'),
+                                                "Page Début": publication.pageStart|default('N/A'),
+                                                "Page Fin": publication.pageEnd|default('N/A'),
+                                                "Nombre de Pages": publication.pageCount|default('N/A'),
+                                                "Organisation": publication.organization|default('N/A'),
+                                                "Statut": publication.status|default('N/A')
+                                            }|json_encode(constant('JSON_HEX_TAG') b-or constant('JSON_HEX_APOS') b-or constant('JSON_HEX_QUOT') b-or constant('JSON_HEX_AMP') b-or constant('JSON_UNESCAPED_UNICODE'))|e }}'>
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+
+                                    <!-- Validate Button -->
+                                    <form action="{{ path('validate_publication', {'id': publication.id}) }}" method="POST" style="display: inline;">
+                                        <button type="button" class="validate-btn" data-bs-toggle="modal" data-bs-target="#confirmationModal" data-publication-id="{{ publication.id }}">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                    </form>
+
+                                    <!-- Reject Button -->
+                                    <button type="button" class="reject-btn" data-bs-toggle="modal" data-bs-target="#rejectModal" data-publication-id="{{ publication.id }}">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center">Aucune demande trouvée.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal for Viewing Details -->
+<div class="modal fade" id="publicationDetailsModal" tabindex="-1" aria-labelledby="publicationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold text-primary">
+                    <i class="fas fa-book-open me-2"></i> Détails de la Publication
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <table class="table table-hover">
+                    <tbody id="modalContent"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div class="modal fade" id="confirmationModal" tabindex="-1" aria-labelledby="confirmationModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold text-success" id="confirmationModalLabel">
+                    <i class="fas fa-check-circle me-2"></i> Confirmer la Validation
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Êtes-vous sûr de vouloir valider cette publication ?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-success" id="confirmValidationBtn">
+                    <i class="fas fa-check me-2"></i> Valider
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reject Modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1" aria-labelledby="rejectModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold text-danger" id="rejectModalLabel">
+                    <i class="fas fa-times-circle me-2"></i> Rejeter la Publication
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="rejectForm" method="POST">
+                    <div class="mb-3">
+                        <label for="rejectMotif" class="form-label">Motif de rejet</label>
+                        <textarea class="form-control" id="rejectMotif" name="rejectMotif" rows="3" required></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-danger" id="confirmRejectBtn">
+                    <i class="fas fa-times me-2"></i> Rejeter
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.1/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.4.0/js/dataTables.responsive.min.js"></script>
+
+    <script>
+        $(document).ready(function() {
+            // Initialize DataTable
+            $('#requestsTable').DataTable({
+                language: { url: '//cdn.datatables.net/plug-ins/1.13.1/i18n/fr-FR.json' },
+                responsive: true,
+                autoWidth: false,
+                pagingType: "full_numbers",
+                pageLength: 10,
+                lengthMenu: [10, 25, 50, 100],
+            });
+
+            // Handle the "View Details" button click
+            $('.view-details-btn').on('click', function () {
+                let publicationData = $(this).attr('data-publication');
+
+                if (!publicationData) {
+                    console.error("No publication data found!");
+                    return;
+                }
+
+                try {
+                    let publication = JSON.parse(publicationData);
+                    let modalContent = $('#modalContent');
+                    modalContent.empty();
+
+                    Object.entries(publication).forEach(([key, value]) => {
+                        if (Array.isArray(value)) {
+                            value = value.join(', ');
+                        }
+                        if (value === null || value === '') {
+                            value = 'N/A';
+                        }
+                        modalContent.append(`<tr><th>${key}</th><td>${value}</td></tr>`);
+                    });
+                } catch (e) {
+                    console.error("Error parsing JSON:", e);
+                }
+            });
+
+            // Handle the "Validate" button click
+            let publicationIdToValidate = null;
+
+            $('.validate-btn').on('click', function () {
+                // Store the publication ID from the button's data attribute
+                publicationIdToValidate = $(this).data('publication-id');
+            });
+
+            // Handle the confirmation button in the modal
+            $('#confirmValidationBtn').on('click', function () {
+                if (publicationIdToValidate) {
+                    // Submit the form for the selected publication
+                    $(`form[action*="/validate-publication/${publicationIdToValidate}"]`).submit();
+                }
+            });
+
+            // Handle the "Reject" button click
+            let publicationIdToReject = null;
+
+            $('.reject-btn').on('click', function () {
+                // Store the publication ID from the button's data attribute
+                publicationIdToReject = $(this).data('publication-id');
+            });
+
+            // Handle the confirmation button in the reject modal
+            $('#confirmRejectBtn').on('click', function () {
+                if (publicationIdToReject) {
+                    // Submit the form for the selected publication
+                    $('#rejectForm').attr('action', `/reject-publication/${publicationIdToReject}`);
+                    $('#rejectForm').submit();
+                }
+            });
+        });
+    </script>
+{% endblock %}

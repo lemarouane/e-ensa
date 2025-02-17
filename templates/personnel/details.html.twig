@@ -1,0 +1,518 @@
+{% extends 'template.html.twig' %}
+
+{% block title %}
+    Détails du Personnel - {{ personnel.nom }} {{ personnel.prenom }}
+{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <!-- DataTable Styles -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.1/css/jquery.dataTables.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.4.0/css/responsive.dataTables.min.css">
+    <style>
+        .chart-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 400px;
+            padding: 20px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .chart-title {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #333;
+            text-align: center;
+        }
+
+        .table-container {
+            margin-bottom: 40px;
+        }
+
+        .chart-wrapper {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* DataTable Styling */
+        #publicationTable thead th {
+            background-color: #ff6632;
+            color: white;
+            text-align: center;
+        }
+
+        #publicationTable td, #publicationTable th {
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .dataTables_filter {
+            margin-bottom: 20px !important;
+        }
+
+        /* Filters Styles */
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .filters label {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .filters select {
+            padding: 8px 16px;
+            font-size: 1rem;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+            cursor: pointer;
+        }
+
+        .filters select:focus {
+            outline: none;
+            border-color: #ff6632;
+            background-color: #fff;
+        }
+
+        /* Style the View Icon */
+        .view-details-icon {
+            font-size: 1.3rem;
+            color: #007bff;
+            cursor: pointer;
+            transition: color 0.3s ease, transform 0.2s ease;
+        }
+
+        /* Improve the View Button */
+        .view-details-btn {
+            transition: all 0.3s ease-in-out;
+            border-radius: 6px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px;
+            background: none;
+            border: none;
+        }
+
+        /* Modal Styling */
+        .custom-modal {
+            border-radius: 12px;
+            box-shadow: 0px 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .custom-table th {
+            background: #ff6632;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+
+        .custom-table td {
+            padding: 10px;
+        }
+
+        .custom-table tr:nth-child(odd) {
+            background: #f1f1f1;
+        }
+
+        /* Center the View Icon in the DataTable Cell */
+        #publicationTable td:last-child {
+            text-align: center;
+            vertical-align: middle;
+            padding: 0; /* Remove default padding to ensure proper centering */
+        }
+
+        #publicationTable td:last-child .view-details-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+
+/* Enhanced Button Styles */
+.add-publication-btn, .view-requests-btn {
+    margin: 10px 0;
+    padding: 10px 20px;
+    font-size: 1rem;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.add-publication-btn {
+    background-color: #28a745;
+    color: white;
+    border: none;
+}
+
+ 
+
+.view-requests-btn {
+    background-color: #17a2b8;
+    color: white;
+    border: none;
+}
+
+ 
+    </style>
+{% endblock %}
+
+{% block body %}
+<div class="statistics-container">
+    <!-- Personnel Details Card -->
+    <div class="card">
+        <div class="card-body">
+                <div class="buttons">
+                    <!-- Add Publication Button -->
+                    <a href="{{ path('add_publication', {id: personnel.id}) }}" class="btn add-publication-btn">
+                        <i class="fas fa-plus me-2"></i> Ajouter une publication
+                    </a>
+
+                    <!-- View Requests Button -->
+                    <a href="{{ path('personnel_requests', {id: personnel.id}) }}" class="btn view-requests-btn">
+                        <i class="fas fa-search me-2"></i> Voir les demandes
+                    </a>
+                </div>
+
+            <!-- Filters Form -->
+            <form method="get" action="{{ path('personnel_details', {id: personnel.id}) }}">
+                <div class="filters">
+                    <!-- Year Filter -->
+                    <select name="year" id="year" onchange="this.form.submit()">
+                        <option value="ALL" {% if selectedYear == 'ALL' %}selected{% endif %}>Toutes les années</option>
+                        {% for year in availableYears %}
+                            <option value="{{ year }}" {% if selectedYear == year %}selected{% endif %}>{{ year }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <!-- Type Filter -->
+                    <select name="type" id="type" onchange="this.form.submit()">
+                        <option value="ALL" {% if selectedType == 'ALL' %}selected{% endif %}>Tous les types</option>
+                        {% for type in availableTypes %}
+                            <option value="{{ type }}" {% if selectedType == type %}selected{% endif %}>{{ type }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <!-- Role Filter -->
+                    <select name="roleFilter" id="roleFilter" onchange="this.form.submit()">
+                        <option value="creator" {% if roleFilter == 'creator' %}selected{% endif %}>Créateur</option>
+                        <option value="collaborator" {% if roleFilter == 'collaborator' %}selected{% endif %}>Collaborateur</option>
+                    </select>
+                </div>
+            </form>
+
+            <!-- Publications Table -->
+            <div class="table-container">
+                <h4 class="publication-header">Publications de {{ personnel.nom }} {{ personnel.prenom }}{% if selectedYear != 'ALL' %} - Année: {{ selectedYear }}{% endif %}{% if selectedStructure != 'ALL' %} - Structure: {{ structureName }}{% endif %}</h4>
+
+                <!-- Charts Section -->
+                <div class="row">
+                    <!-- Pie Chart for Publication Types (Hidden if a specific type is selected) -->
+                    {% if selectedType == 'ALL' %}
+                    <div class="col-lg-6 col-md-12 mb-4 {% if selectedYear != 'ALL' %}col-lg-12{% endif %}">
+                        <div class="card shadow-lg">
+                            <div class="card-body text-center">
+                                <h5 class="chart-title">Types de Publications</h5>
+                                <hr>
+                                <div class="chart-container">
+                                    <div id="publicationTypesChart" class="chart-wrapper"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Yearly Trends Chart (Hidden when a specific year is selected) -->
+                    {% if selectedYear == 'ALL' %}
+                    <div class="col-lg-6 col-md-12 mb-4 {% if selectedType != 'ALL' %}col-lg-12{% endif %}">
+                        <div class="card shadow-lg">
+                            <div class="card-body text-center">
+                                <h5 class="chart-title">Tendances des Publications par Année</h5>
+                                <hr>
+                                <div class="chart-container">
+                                    <div id="publicationTrendsChart" class="chart-wrapper"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <table id="publicationTable" class="table table-bordered table-striped">
+                    <thead>
+                        <tr>
+                            <th>Titre</th>
+                            <th>Auteur(s)</th>
+                            <th>Date</th>
+                            <th>Éditeur</th>
+                            <th>Actions</th> <!-- ✅ New Actions Column -->
+                        </tr>
+                    </thead>
+
+                    {# Filter out duplicates based on the title #}
+                    {% set uniquePublications = [] %}
+                    {% set titles = [] %}
+
+                    {% for publication in publications %}
+                        {% if publication.title not in titles %}
+                            {% set titles = titles|merge([publication.title]) %}
+                            {% set uniquePublications = uniquePublications|merge([publication]) %}
+                        {% endif %}
+                    {% endfor %}
+
+                    {# Use the filtered `uniquePublications` array in your DataTable #}
+                    <tbody>
+                        {% for publication in uniquePublications %}
+                            <tr>
+                                <td>{{ publication.title|default('N/A') }}</td>
+                                <td>{{ publication.authorNames|join(', ')|default('N/A') }}</td>
+                                <td>{{ publication.coverDate|default('N/A') }}</td>
+                                <td>{{ publication.publisher|default('N/A') }}</td>
+                                <td>
+                                    <button class="btn btn-outline-primary btn-sm view-details-btn px-3"
+                                            data-bs-toggle="modal" data-bs-target="#publicationDetailsModal"
+                                            data-publication='{{ {
+                                                "ID": publication.id|default('N/A'),
+                                                "Titre": publication.title|default('N/A'),
+                                                "Auteurs": publication.authorNames|join(', ')|default('N/A'),
+                                                "Nom de la Publication": publication.publicationName|default('N/A'),
+                                                "Éditeur": publication.publisher|default('N/A'),
+                                                "Abstract": publication.abstract|default('N/A'),
+                                                "Année": publication.year|default('N/A'),
+                                                "Date de Couverture": publication.coverDate|default('N/A'),
+                                                "Volume": publication.volume|default('N/A'),
+                                                "Issue": publication.issue|default('N/A'),
+                                                "Type de Publication": publication.aggregationType|default('N/A'),
+                                                "Source": publication.sourceTitle|default('N/A'),
+                                                "DOI": publication.artNo|default('N/A'),
+                                                "Page Début": publication.pageStart|default('N/A'),
+                                                "Page Fin": publication.pageEnd|default('N/A'),
+                                                "Nombre de Pages": publication.pageCount|default('N/A'),
+                                                "Organisation": publication.organization|default('N/A'),
+                                                "Créateur": publication.creator|default('N/A')
+                                            }|json_encode(constant('JSON_HEX_TAG') b-or constant('JSON_HEX_APOS') b-or constant('JSON_HEX_QUOT') b-or constant('JSON_HEX_AMP') b-or constant('JSON_UNESCAPED_UNICODE'))|e }}'>
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center">Aucune publication trouvée pour ce type.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal for Publication Details -->
+<div class="modal fade" id="publicationDetailsModal" tabindex="-1" aria-labelledby="publicationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content custom-modal">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold text-primary">
+                    <i class="fas fa-book-open me-2"></i> Plus d'informations sur cette Publication.
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <table class="table table-hover custom-table">
+                    <tbody id="modalContent"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <!-- DataTable JS and dependencies -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.1/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.4.0/js/dataTables.responsive.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Initialize DataTable
+            const table = $('#publicationTable').DataTable({
+                language: { url: '//cdn.datatables.net/plug-ins/1.13.1/i18n/fr-FR.json' },
+                responsive: true,
+                autoWidth: false,
+                pagingType: "full_numbers",
+                pageLength: 5,
+                lengthMenu: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50],
+            });
+
+            // =============================================
+            // Pie Chart Logic (Unchanged)
+            // =============================================
+            {% if selectedType == 'ALL' %}
+            const publicationTypes = {{ statistics.publicationTypes|json_encode|raw }};
+            const typeLabels = Object.keys(publicationTypes);
+            const typeData = Object.values(publicationTypes);
+
+            const publicationTypesChart = new ApexCharts(document.querySelector("#publicationTypesChart"), {
+                chart: {
+                    type: 'pie',
+                    height: 400,
+                    width: "100%"
+                },
+                series: typeData,
+                labels: typeLabels,
+                plotOptions: {
+                    pie: {
+                        donut: { size: '65%' },
+                        dataLabels: { enabled: true }
+                    }
+                },
+                tooltip: { y: { formatter: (val) => `${val} publications` } }
+            });
+            publicationTypesChart.render();
+            {% endif %}
+
+            // =============================================
+            // Years Chart Logic (Dynamic Updates)
+            // =============================================
+            // Function to extract years and counts from the visible rows in the DataTable
+            function getYearlyTrendsFromTable() {
+                const yearsMap = new Map();
+
+                // Loop through all visible rows in the DataTable
+                table.rows({ search: 'applied' }).every(function () {
+                    const rowData = this.data();
+                    const date = rowData[2]; // Assuming the date is in the 3rd column (index 2)
+                    const year = date ? new Date(date).getFullYear() : null;
+
+                    if (year) {
+                        if (yearsMap.has(year)) {
+                            yearsMap.set(year, yearsMap.get(year) + 1);
+                        } else {
+                            yearsMap.set(year, 1);
+                        }
+                    }
+                });
+
+                // Convert the map to arrays for ApexCharts
+                const years = Array.from(yearsMap.keys()).sort((a, b) => a - b); // Sort years ascending
+                const counts = years.map(year => yearsMap.get(year));
+
+                return { years, counts };
+            }
+
+            // Function to render or update the Years Chart
+            function renderYearsChart() {
+                const { years, counts } = getYearlyTrendsFromTable();
+
+                const options = {
+                    chart: {
+                        type: 'area',
+                        height: 400,
+                        width: "100%",
+                        toolbar: { show: false },
+                        animations: { enabled: true, easing: 'easeinout', speed: 800 }
+                    },
+                    series: [{ name: "Publications", data: counts }],
+                    xaxis: {
+                        categories: years,
+                        title: { text: "Année" }
+                    },
+                    yaxis: {
+                        title: { text: "Nombre de Publications" },
+                    },
+                    markers: {
+                        size: 6,
+                        colors: ["#FF6632"],
+                        strokeColors: "#fff",
+                        strokeWidth: 2,
+                        hover: { size: 9 }
+                    },
+                    colors: ["#FF6632"],
+                    stroke: { curve: 'smooth', width: 3 },
+                    fill: {
+                        type: 'gradient',
+                        gradient: {
+                            shade: 'light',
+                            type: "vertical",
+                            shadeIntensity: 0.3,
+                            gradientToColors: ['#FFA07A'],
+                            inverseColors: false,
+                            opacityFrom: 0.8,
+                            opacityTo: 0.3,
+                        }
+                    },
+                    tooltip: {
+                        theme: "dark",
+                        x: { show: true },
+                        y: { formatter: (val) => `${val} publications` }
+                    },
+                    grid: {
+                        borderColor: "#f1f1f1",
+                        strokeDashArray: 5,
+                    }
+                };
+
+                // Render or update the chart
+                if (window.yearsChart) {
+                    window.yearsChart.updateOptions(options);
+                } else {
+                    window.yearsChart = new ApexCharts(document.querySelector("#publicationTrendsChart"), options);
+                    window.yearsChart.render();
+                }
+            }
+
+            // Render the Years Chart initially
+            renderYearsChart();
+
+            // Update the Years Chart when the table is filtered, sorted, or paged
+            table.on('draw', function () {
+                renderYearsChart();
+            });
+
+            // =============================================
+            // Modal Logic (Unchanged)
+            // =============================================
+            $('.view-details-btn').on('click', function () {
+                let publicationData = $(this).attr('data-publication');
+
+                if (!publicationData) {
+                    console.error("No publication data found!");
+                    return;
+                }
+
+                try {
+                    let publication = JSON.parse(publicationData);
+                    let modalContent = $('#modalContent');
+                    modalContent.empty(); // Clear previous data
+
+                    Object.entries(publication).forEach(([key, value]) => {
+                        if (Array.isArray(value)) {
+                            value = value.join(', ');
+                        }
+                        if (value === null || value === '') {
+                            value = 'N/A';
+                        }
+                        modalContent.append(`<tr><th>${key}</th><td>${value}</td></tr>`);
+                    });
+                } catch (e) {
+                    console.error("Error parsing JSON:", e);
+                }
+            });
+        });
+    </script>
+{% endblock %}
