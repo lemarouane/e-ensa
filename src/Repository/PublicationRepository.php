@@ -6,14 +6,6 @@ use App\Entity\Publication;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
-/**
- * @extends ServiceEntityRepository<Publication>
- *
- * @method Publication|null find($id, $lockMode = null, $lockVersion = null)
- * @method Publication|null findOneBy(array $criteria, array $orderBy = null)
- * @method Publication[]    findAll()
- * @method Publication[]    findBy(array $criteria, array $orderBy = null, $limit = null, $offset = null)
- */
 class PublicationRepository extends ServiceEntityRepository
 {
     public function __construct(ManagerRegistry $registry)
@@ -21,46 +13,35 @@ class PublicationRepository extends ServiceEntityRepository
         parent::__construct($registry, Publication::class);
     }
 
-    public function save(Publication $entity, bool $flush = false): void
+    public function findEmptyAuthorNames()
     {
-        $this->getEntityManager()->persist($entity);
-
-        if ($flush) {
-            $this->getEntityManager()->flush();
-        }
+        $conn = $this->getEntityManager()->getConnection();
+    
+        // Use raw SQL query to check for empty or null author_names field
+        $sql = "SELECT * FROM publication WHERE author_names IS NULL OR author_names = '[]' OR JSON_LENGTH(author_names) = 0";
+        $stmt = $conn->prepare($sql);
+        $result = $stmt->executeQuery()->fetchAllAssociative();
+    
+        // Now we need to map the raw result back to Publication entities
+        return $this->getEntityManager()->getRepository(Publication::class)->findBy(['id' => array_column($result, 'id')]);
+    }
+    
+    
+    
+    
+    public function countEmptyAuthorNames()
+    {
+        $conn = $this->getEntityManager()->getConnection();
+        
+        // Update the count query to reflect the same checks.
+        $sql = "SELECT COUNT(*) as count FROM publication WHERE author_names IS NULL OR author_names = '[]' OR JSON_LENGTH(author_names) = 0";
+        $stmt = $conn->prepare($sql);
+        $result = $stmt->executeQuery()->fetchAssociative();
+        
+        return (int) $result['count'];
     }
 
-    public function remove(Publication $entity, bool $flush = false): void
-    {
-        $this->getEntityManager()->remove($entity);
 
-        if ($flush) {
-            $this->getEntityManager()->flush();
-        }
-    }
-
-//    /**
-//     * @return Publication[] Returns an array of Publication objects
-//     */
-//    public function findByExampleField($value): array
-//    {
-//        return $this->createQueryBuilder('p')
-//            ->andWhere('p.exampleField = :val')
-//            ->setParameter('val', $value)
-//            ->orderBy('p.id', 'ASC')
-//            ->setMaxResults(10)
-//            ->getQuery()
-//            ->getResult()
-//        ;
-//    }
-
-//    public function findOneBySomeField($value): ?Publication
-//    {
-//        return $this->createQueryBuilder('p')
-//            ->andWhere('p.exampleField = :val')
-//            ->setParameter('val', $value)
-//            ->getQuery()
-//            ->getOneOrNullResult()
-//        ;
-//    }
+    
+    
 }
