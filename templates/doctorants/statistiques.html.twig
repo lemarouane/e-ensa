@@ -4,7 +4,49 @@
 
 {% block stylesheets %}
     {{ parent() }}
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js/dist/Chart.min.css">
+    <!-- ApexCharts CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/apexcharts/dist/apexcharts.css">
+    <style>
+        .chart-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 400px;
+            padding: 20px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .chart-title {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #333;
+            text-align: center;
+        }
+
+        .card {
+            border-radius: 12px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .display-4 {
+            font-size: 3rem;
+            font-weight: 700;
+            color: #007bff;
+        }
+
+        .text-muted {
+            font-size: 1.5rem;
+            color: #6c757d;
+        }
+    </style>
 {% endblock %}
 
 {% block body %}
@@ -34,8 +76,8 @@
             <div class="card-body text-center">
                 <h5 class="card-title">Doctorants Validés vs Non Validés</h5>
                 <hr>
-                <div style="position: relative; height: 400px; display: flex; justify-content: center; align-items: center;">
-                    <canvas id="validationStatusChart"></canvas>
+                <div class="chart-container">
+                    <div id="validationStatusChart"></div>
                 </div>
             </div>
         </div>
@@ -47,8 +89,8 @@
             <div class="card-body text-center">
                 <h5 class="card-title">Répartition par Genre</h5>
                 <hr>
-                <div style="position: relative; height: 400px; display: flex; justify-content: center; align-items: center;">
-                    <canvas id="genderChart"></canvas>
+                <div class="chart-container">
+                    <div id="genderChart"></div>
                 </div>
             </div>
         </div>
@@ -62,8 +104,8 @@
             <div class="card-body text-center">
                 <h5 class="card-title">Répartition par Nationalité</h5>
                 <hr>
-                <div style="position: relative; height: 400px; display: flex; justify-content: center; align-items: center;">
-                    <canvas id="nationalityChart"></canvas>
+                <div class="chart-container">
+                    <div id="nationalityChart" style="width: 100%;"></div>
                 </div>
             </div>
         </div>
@@ -75,8 +117,8 @@
             <div class="card-body text-center">
                 <h5 class="card-title">Répartition des Mentions au Bac</h5>
                 <hr>
-                <div style="position: relative; height: 400px; display: flex; justify-content: center; align-items: center;">
-                    <canvas id="bacMentionsChart"></canvas>
+                <div class="chart-container">
+                    <div id="bacMentionsChart"></div>
                 </div>
             </div>
         </div>
@@ -108,80 +150,91 @@
 
 {% block javascripts %}
     {{ parent() }}
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- ApexCharts JS -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 
     <script>
-        // Validation Status Chart
-        new Chart(document.getElementById('validationStatusChart'), {
-            type: 'pie',
-            data: {
+        document.addEventListener('DOMContentLoaded', function () {
+            // Validation Status Chart
+            const validationStatusChart = new ApexCharts(document.querySelector("#validationStatusChart"), {
+                chart: { type: 'pie', height: 350 },
+                series: [{{ data.validatedDoctorants }}, {{ data.nonValidatedDoctorants }}],
                 labels: ['Validés', 'Non Validés'],
-                datasets: [{
-                    data: [{{ data.validatedDoctorants }}, {{ data.nonValidatedDoctorants }}],
-                    backgroundColor: ['#28a745', '#dc3545']
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { position: 'bottom' }
-                }
-            }
-        });
+                colors: ['#28a745', '#dc3545'],
+                legend: { position: 'bottom' },
+                tooltip: { y: { formatter: (val) => `${val} doctorants` } }
+            });
+            validationStatusChart.render();
 
-        // Gender Distribution Chart
-        new Chart(document.getElementById('genderChart'), {
-            type: 'pie',
-            data: {
+            // Gender Distribution Chart
+            const genderChart = new ApexCharts(document.querySelector("#genderChart"), {
+                chart: { type: 'donut', height: 350 },
+                series: [{{ data.genderDistribution.MASCULIN }}, {{ data.genderDistribution.FEMININ }}],
                 labels: ['MASCULIN', 'FEMININ'],
-                datasets: [{
-                    data: [{{ data.genderDistribution.MASCULIN }}, {{ data.genderDistribution.FEMININ }}],
-                    backgroundColor: ['#007bff', '#e83e8c']
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { position: 'bottom' }
-                }
-            }
-        });
+                colors: ['#007bff', '#e83e8c'],
+                legend: { position: 'bottom' },
+                tooltip: { y: { formatter: (val) => `${val} doctorants` } }
+            });
+            genderChart.render();
 
-        // Nationality Distribution Chart
-        new Chart(document.getElementById('nationalityChart'), {
-            type: 'bar',
-            data: {
-                labels: {{ data.nationalityDistribution.labels|json_encode|raw }},
-                datasets: [{
-                    data: {{ data.nationalityDistribution.values|json_encode|raw }},
-                    backgroundColor: '#17a2b8'
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    x: { title: { display: true, text: 'Nationalité' } },
-                    y: { title: { display: true, text: 'Nombre' } }
-                }
+const nationalityChart = new ApexCharts(document.querySelector("#nationalityChart"), {
+    chart: {
+        type: 'bar',
+        height: 350,
+        width: '100%',
+        toolbar: {
+            show: false
+        }
+    },
+    plotOptions: {
+        bar: {
+            horizontal: false,
+            columnWidth: '70%',
+            distributed: true
+        }
+    },
+    series: [{ 
+        name: 'Nationalité', 
+        data: {{ data.nationalityDistribution.values|json_encode|raw }} 
+    }],
+    xaxis: {
+        categories: {{ data.nationalityDistribution.labels|json_encode|raw }},
+        labels: {
+            style: {
+                fontSize: '12px'
             }
-        });
+        }
+    },
+    colors: ['#17a2b8'],
+    legend: {
+        show: false
+    },
+    tooltip: { 
+        y: { 
+            formatter: (val) => `${val} doctorants` 
+        } 
+    },
+    responsive: [{
+        breakpoint: undefined,
+        options: {
+            chart: {
+                width: '100%'
+            }
+        }
+    }]
+});
+nationalityChart.render();
 
-        // Bac Mentions Chart
-        new Chart(document.getElementById('bacMentionsChart'), {
-            type: 'doughnut',
-            data: {
+            // Bac Mentions Chart
+            const bacMentionsChart = new ApexCharts(document.querySelector("#bacMentionsChart"), {
+                chart: { type: 'pie', height: 350 },
+                series: {{ data.bacMentions.values|json_encode|raw }},
                 labels: {{ data.bacMentions.labels|json_encode|raw }},
-                datasets: [{
-                    data: {{ data.bacMentions.values|json_encode|raw }},
-                    backgroundColor: ['#007bff', '#ffc107', '#28a745', '#dc3545', '#6c757d']
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { position: 'bottom' }
-                }
-            }
+                colors: ['#007bff', '#ffc107', '#28a745', '#dc3545', '#6c757d'],
+                legend: { position: 'bottom' },
+                tooltip: { y: { formatter: (val) => `${val} doctorants` } }
+            });
+            bacMentionsChart.render();
         });
     </script>
 {% endblock %}

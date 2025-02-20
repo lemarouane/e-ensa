@@ -7,11 +7,11 @@
     <div class="breadcrumb-title pe-3">Importer des Doctorants</div>
 </div>
 <div class="row">
-    <div class="col-lg-12 mx-auto">
-        <div class="card shadow-sm border-0">
+    <div class="col-lg-8 mx-auto mb-4">
+        <div class="card shadow-lg border-0 rounded-3">
             <div class="card-body">
-                <h5 class="card-title">Importer des Doctorants depuis Excel</h5>
-                <hr>
+                <h5 class="card-title mb-4">Importer des Doctorants depuis Excel</h5>
+                <hr class="my-3">
                 
                 {% for label, messages in app.flashes %}
                     {% for message in messages %}
@@ -37,13 +37,29 @@
                         </small>
                     </div>
 
-                    <div class="text-end mt-3">
+                    <div class="d-flex justify-content-between mt-4">
                         <button type="submit" class="btn btn-primary">Importer</button>
-                        <a href="{{ path('list_doctorants') }}" class="btn btn-secondary">Retour</a>
+                        <a href="{{ path('list_doctorants') }}" class="btn btn-outline-secondary">Retour</a>
                     </div>
                 </form>
             </div>
         </div>
     </div>
+
+    <!-- New Container for Downloading Excel Template -->
+    <div class="col-lg-4 mx-auto mb-4">
+        <div class="card shadow-lg border-0 rounded-3">
+            <div class="card-body">
+                <h5 class="card-title mb-4">Télécharger le Modèle Excel</h5>
+                <hr class="my-3">
+                <p class="card-text mb-4">
+                    Téléchargez le modèle Excel pour savoir comment structurer votre fichier.
+                </p>
+                <a href="{{ asset('uploads/maquette.xlsx') }}" class="btn btn-success" download>
+                    <i class="fas fa-download"></i> Télécharger le Modèle
+                </a>
+            </div>
+        </div>
+    </div>
 </div>
-{% endblock %} 
+{% endblock %}
