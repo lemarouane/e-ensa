@@ -1060,28 +1060,63 @@ class DoctorantsController extends AbstractController
         EntityManagerInterface $entityManager
     ): Response {
         $personnel = $personnelRepository->find($id);
-        
+    
         if (!$personnel) {
             throw $this->createNotFoundException('Personnel not found.');
         }
     
-        // Get filters from the query parameters
+        // Get the filters from the query parameters
         $selectedYear = $request->query->get('year', 'ALL');
         $selectedStructure = $request->query->get('structure', 'ALL');
         $selectedType = $request->query->get('type', 'ALL');
-        $roleFilter = $request->query->get('roleFilter', 'collaborator');
+        $roleFilter = $request->query->get('roleFilter', 'collaborator'); // New filter
     
-        // Fetch all publications
-        $publications = $publicationRepository->findBy(['personnel' => $personnel, 'status' => 'validée']);
+        // Default structure name
+        $structureName = 'Toutes les Structures'; 
+        if ($selectedStructure !== 'ALL') {
+            $structure = $entityManager->getRepository(StructRech::class)->find($selectedStructure);
+            if ($structure) {
+                $structureName = $structure->getLibelleStructure();
+            }
+        }
     
-        // Filter publications by year if selected
+        // Fetch all publications first
+        $publications = $publicationRepository->findAll();
+    
+        // Filter publications by status "validée"
+        $publications = array_filter($publications, function ($publication) {
+            return $publication->getStatus() === 'validée';
+        });
+    
+// Filter publications based on the role
+if ($roleFilter === 'creator') {
+    $publications = array_filter($publications, function ($publication) use ($personnel) {
+        // Retrieve the last name and first initial of the personnel
+        $personnelLastName = strtolower(trim($personnel->getNom()));
+        $personnelFirstInitial = strtolower(trim(substr($personnel->getPrenom(), 0, 1)));
+
+        // Combine them for comparison (e.g., "Moussa A.")
+        $fullNameToMatch = $personnelLastName . ' ' . $personnelFirstInitial . '.';
+
+        // Compare with the creator field in the publication
+        return strpos(strtolower(trim($publication->getCreator())), $fullNameToMatch) !== false;
+    });
+}
+ elseif ($roleFilter === 'collaborator') {
+            // For collaborator, simply fetch publications based on personnel's ID
+            $publications = array_filter($publications, function ($publication) use ($personnel) {
+                return $publication->getPersonnel()->getId() === $personnel->getId();
+            });
+        }
+    
+        // Filter by year if selected
         if ($selectedYear !== 'ALL') {
             $publications = array_filter($publications, function ($publication) use ($selectedYear) {
                 return substr($publication->getCoverDate(), 0, 4) == $selectedYear;
             });
         }
     
-        // Filter publications based on structure if selected
+        // Filter by structure if selected
         if ($selectedStructure !== 'ALL') {
             $publications = array_filter($publications, function ($publication) use ($selectedStructure) {
                 return $publication->getPersonnel()->getStructureRech()->getId() == $selectedStructure;
@@ -1095,32 +1130,16 @@ class DoctorantsController extends AbstractController
             });
         }
     
-        // Remove duplicates based on title, abstract, source title, and volume
-        $uniquePublications = [];
-        $publicationKeys = [];
-    
-        foreach ($publications as $publication) {
-            // Create a unique key based on all 4 fields: title, abstract, source_title, and volume
-            $key = $publication->getTitle() . '|' . $publication->getAbstract() . '|' . $publication->getSourceTitle() . '|' . $publication->getVolume();
-            
-            // Only add to uniquePublications if this key hasn't been encountered before
-            if (!in_array($key, $publicationKeys)) {
-                $publicationKeys[] = $key;
-                $uniquePublications[] = $publication;
-            }
-        }
-    
-        // Prepare statistics and other data
-        $totalPublications = count($uniquePublications);
-    
-        // Count publication types, trends, etc.
+        // Prepare statistics for display
         $publicationTypes = [];
         $publicationTrends = array_fill_keys(range(1990, 2025), 0);
     
-        foreach ($uniquePublications as $publication) {
+        foreach ($publications as $publication) {
+            // Count publication types
             $type = $publication->getAggregationType() ?? 'Other';
             $publicationTypes[$type] = ($publicationTypes[$type] ?? 0) + 1;
     
+            // Count publication trends per year
             $year = substr($publication->getCoverDate(), 0, 4);
             if (isset($publicationTrends[$year])) {
                 $publicationTrends[$year]++;
@@ -1129,7 +1148,7 @@ class DoctorantsController extends AbstractController
     
         // Count publications per personnel
         $personnelCounts = [];
-        foreach ($uniquePublications as $publication) {
+        foreach ($publications as $publication) {
             $personnelName = $publication->getPersonnel()->getNom() . ' ' . $publication->getPersonnel()->getPrenom();
             if (isset($personnelCounts[$personnelName])) {
                 $personnelCounts[$personnelName]++;
@@ -1143,35 +1162,26 @@ class DoctorantsController extends AbstractController
             'publicationTypes' => $publicationTypes,
             'publicationTrends' => $publicationTrends,
             'personnelCounts' => $personnelCounts,
-            'totalPublications' => $totalPublications,
-            'personnelContributions' => [],
         ];
-    
-        // Add personnel contributions with the count of unique publications
-        foreach ($personnelCounts as $personnelName => $count) {
-            $statistics['personnelContributions'][] = [
-                'nom' => $personnelName,
-                'publicationCount' => $count,
-            ];
-        }
     
         // Get available years and types for filters
         $availableYears = array_unique(array_map(function ($publication) {
             return substr($publication->getCoverDate(), 0, 4);
-        }, $uniquePublications));
+        }, $publications));
     
         $availableTypes = array_unique(array_map(function ($publication) {
             return $publication->getAggregationType() ?? 'Other';
-        }, $uniquePublications));
+        }, $publications));
     
         // Render the view with the data
         return $this->render('personnel/details.html.twig', [
             'personnel' => $personnel,
-            'publications' => $uniquePublications,  // Send unique publications
+            'publications' => $publications,
             'selectedYear' => $selectedYear,
             'selectedStructure' => $selectedStructure,
+            'structureName' => $structureName,
             'selectedType' => $selectedType,
-            'roleFilter' => $roleFilter,
+            'roleFilter' => $roleFilter, // Pass the new filter to Twig
             'statistics' => $statistics,
             'availableYears' => $availableYears,
             'availableTypes' => $availableTypes,
