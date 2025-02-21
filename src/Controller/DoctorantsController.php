@@ -22,7 +22,11 @@ use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 use Psr\Log\LoggerInterface; 
-
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+ 
+use PhpOffice\PhpSpreadsheet\Style\Color;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
 class DoctorantsController extends AbstractController
 {
     private const ELSEVIER_API_KEY = 'd4e08b370c38fe76dec2aed9a389c5af';
@@ -1049,6 +1053,160 @@ class DoctorantsController extends AbstractController
     }
     
 
+    
+    #[Route('/export-publications', name: 'export_publications', methods: ['POST'])]
+    public function exportPublications(
+        Request $request,
+        PublicationRepository $publicationRepository,
+        PersonnelRepository $personnelRepository,
+        EntityManagerInterface $entityManager
+    ): Response {
+        // Get selected personnel IDs from the POST request
+        $personnelIds = $request->request->get('personnelIds', []);
+    
+        if (empty($personnelIds)) {
+            $this->addFlash('error', 'Aucun personnel sélectionné.');
+            return $this->redirectToRoute('personnel_statistics');
+        }
+    
+        // Create a new spreadsheet
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+    
+        // Insert the title in the header
+        $sheet->setCellValue('A1', 'ENSA : École Nationale des Sciences Appliquées de Tanger');
+    
+        // Merge the title cells
+        $sheet->mergeCells('A1:Y1');
+        $sheet->getStyle('A1:Y1')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('A1:Y1')->getFont()->setBold(true)->setSize(16); // Bold and larger font
+    
+        // Add headers to the spreadsheet for all the publication fields
+        $sheet->setCellValue('A3', 'Nombre de Publications') // Added this field for counting publications
+              ->setCellValue('B3', 'Nom')
+              ->setCellValue('C3', 'Prénom')
+              ->setCellValue('D3', 'Titre')
+              ->setCellValue('E3', 'Type de publication')
+              ->setCellValue('F3', 'Nom de publication')
+              ->setCellValue('G3', 'Editeur')
+              ->setCellValue('H3', 'Plage de pages')
+              ->setCellValue('I3', 'Date de publication')
+              ->setCellValue('J3', 'Abstract')
+              ->setCellValue('K3', 'Auteurs')
+              ->setCellValue('L3', 'Auteurs IDs')
+              ->setCellValue('M3', 'Organisation')
+              ->setCellValue('N3', 'Créateur')
+              ->setCellValue('O3', 'Nom Complet du Personnel')
+              ->setCellValue('P3', 'Année')
+              ->setCellValue('Q3', 'Titre Source')
+              ->setCellValue('R3', 'Volume')
+              ->setCellValue('S3', 'Numéro')
+              ->setCellValue('T3', 'Art No')
+              ->setCellValue('U3', 'Page Début')
+              ->setCellValue('V3', 'Page Fin')
+              ->setCellValue('W3', 'Page Compte')
+              ->setCellValue('X3', 'Plateforme')
+              ->setCellValue('Y3', 'Statut');
+    
+        // Style for headers (bold, background color, and centered text)
+        $headerStyle = [
+            'font' => [
+                'bold' => true,
+                'size' => 12
+            ],
+            'alignment' => [
+                'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+                'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER
+            ],
+            'fill' => [
+                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                'startColor' => ['rgb' => 'ADD8E6'] // Soft blue color
+            ]
+        ];
+    
+        // Apply header style to all header cells
+        $sheet->getStyle('A3:Y3')->applyFromArray($headerStyle);
+    
+        // Apply alternating row colors for readability
+        $alternatingRowStyle = [
+            'fill' => [
+                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                'startColor' => ['rgb' => 'F2F2F2']
+            ]
+        ];
+    
+        $row = 4;
+        $rowIndex = 1; // To apply alternating row styles
+    
+        // Loop through selected personnel IDs to fetch and display their publications
+        foreach ($personnelIds as $personnelId) {
+            $personnel = $personnelRepository->find($personnelId);
+            $publications = $publicationRepository->findBy(['personnel' => $personnel, 'status' => 'validée']);
+    
+            // Insert the number of publications in the "Nombre de Publications" column
+            $nombreDePublications = count($publications);
+            $sheet->setCellValue('A' . $row, $nombreDePublications); // Number of publications
+    
+            // Center the number in the "Nombre de Publications" cell
+            $sheet->getStyle('A' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+    
+            // Merge the first column cells for this person's publications
+            $sheet->mergeCells("A$row:A" . ($row + $nombreDePublications - 1));
+    
+            // Now add the rest of the data for the publications
+            foreach ($publications as $publication) {
+                $sheet->setCellValue('B' . $row, $personnel->getNom())
+                      ->setCellValue('C' . $row, $personnel->getPrenom())
+                      ->setCellValue('D' . $row, $publication->getTitle())
+                      ->setCellValue('E' . $row, $publication->getAggregationType())
+                      ->setCellValue('F' . $row, $publication->getPublicationName())
+                      ->setCellValue('G' . $row, $publication->getPublisher())
+                      ->setCellValue('H' . $row, $publication->getPageRange())
+                      ->setCellValue('I' . $row, $publication->getCoverDate())
+                      ->setCellValue('J' . $row, $publication->getAbstract())
+                      ->setCellValue('K' . $row, implode(', ', $publication->getAuthorNames())) // Authors as a comma-separated string
+                      ->setCellValue('L' . $row, implode(', ', $publication->getAuthorIds())) // Author IDs as a comma-separated string
+                      ->setCellValue('M' . $row, $publication->getOrganization())
+                      ->setCellValue('N' . $row, $publication->getCreator())
+                      ->setCellValue('O' . $row, $publication->getPersonnelFullName())
+                      ->setCellValue('P' . $row, $publication->getYear())
+                      ->setCellValue('Q' . $row, $publication->getSourceTitle())
+                      ->setCellValue('R' . $row, $publication->getVolume())
+                      ->setCellValue('S' . $row, $publication->getIssue())
+                      ->setCellValue('T' . $row, $publication->getArtNo())
+                      ->setCellValue('U' . $row, $publication->getPageStart())
+                      ->setCellValue('V' . $row, $publication->getPageEnd())
+                      ->setCellValue('W' . $row, $publication->getPageCount())
+                      ->setCellValue('X' . $row, $publication->getPlateforme())
+                      ->setCellValue('Y' . $row, $publication->getStatus());
+    
+                // Apply alternating row color style
+                if ($rowIndex % 2 == 0) {
+                    $sheet->getStyle('B' . $row . ':Y' . $row)->applyFromArray($alternatingRowStyle);
+                }
+    
+                $row++;
+                $rowIndex++;
+            }
+        }
+    
+        // Manually adjust column widths for all columns (no auto-fit)
+        foreach (range('A', 'Y') as $col) {
+            $sheet->getColumnDimension($col)->setWidth(15); // Fixed width for all columns
+        }
+    
+        // Write to file
+        $writer = new Xlsx($spreadsheet);
+        $fileName = 'publications_' . time() . '.xlsx';
+        $temp_file = tempnam(sys_get_temp_dir(), 'export_');
+        $writer->save($temp_file);
+    
+        // Return the file as a response
+        return $this->file($temp_file, $fileName);
+    }
+    
+    
+    
 
 
     #[Route('/personnel/{id}/details', name: 'personnel_details')]

@@ -174,16 +174,19 @@
     <div class="card-body">
         <div class="table-responsive">
             <table id="personnelTable" class="table table-striped">
-                <thead>
-                    <tr>
+<thead>
+    <tr>
+        <th><input type="checkbox" id="selectAll"></th> <!-- Checkbox to select all -->
                         <th>Nom et Prénom</th> <!-- Name column -->
                         <th>Nombre total de publications</th> <!-- Publications Count -->
                          <th>Actions</th> <!-- Actions column -->
                     </tr>
                 </thead>
-                <tbody>
-                    {% for person in statistics.personnelContributions %}
-                        <tr>
+<tbody>
+    {% for person in statistics.personnelContributions %}
+        <tr>
+            <td><input type="checkbox" class="selectPerson" data-id="{{ person.id }}"></td> <!-- Individual checkbox -->
+
                             <td>{{ person.nom }} {{ person.prenom }}</td>
                             <td>{{ person.publicationCount }}</td>
  
@@ -198,6 +201,11 @@
             </table>
         </div>
     </div>
+</div>
+<div class="text-center mt-4">
+    <button id="downloadButton" class="btn btn-success" disabled>
+        Télécharger les Données
+    </button>
 </div>
 
 {% endblock %}
@@ -319,6 +327,68 @@
         }
         {% endif %}
     });
+
+
+
+    document.addEventListener('DOMContentLoaded', function () {
+    const selectAllCheckbox = document.getElementById('selectAll');
+    const selectPersonCheckboxes = document.querySelectorAll('.selectPerson');
+    const downloadButton = document.getElementById('downloadButton');
+    const selectedPersonnelIds = [];
+
+    // Select all checkboxes functionality
+    selectAllCheckbox.addEventListener('change', function () {
+        const isChecked = selectAllCheckbox.checked;
+        selectPersonCheckboxes.forEach(checkbox => {
+            checkbox.checked = isChecked;
+        });
+        toggleDownloadButton();
+    });
+
+    // Track individual checkbox selections
+    selectPersonCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function () {
+            toggleDownloadButton();
+        });
+    });
+
+    function toggleDownloadButton() {
+        selectedPersonnelIds.length = 0; // Reset the selected IDs
+        selectPersonCheckboxes.forEach(checkbox => {
+            if (checkbox.checked) {
+                selectedPersonnelIds.push(checkbox.dataset.id);
+            }
+        });
+
+        // Enable button if any checkbox is selected
+        if (selectedPersonnelIds.length > 0) {
+            downloadButton.disabled = false;
+        } else {
+            downloadButton.disabled = true;
+        }
+    }
+
+    // Handle the export request
+    downloadButton.addEventListener('click', function () {
+        if (selectedPersonnelIds.length > 0) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '{{ path('export_publications') }}';
+            
+            selectedPersonnelIds.forEach(id => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'personnelIds[]';
+                input.value = id;
+                form.appendChild(input);
+            });
+
+            document.body.appendChild(form);
+            form.submit();
+        }
+    });
+});
+
 </script>
 
 {% endblock %}
