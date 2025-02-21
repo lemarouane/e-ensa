@@ -269,8 +269,62 @@
                 pagingType: "full_numbers",
                 pageLength: 10,
                 lengthMenu: [10, 25, 50, 100],
-                order: [[1,'desc']] // Sort by Publications Count
+                order: [[2,'desc']] // Sort by Publications Count
             });
+                        // Track selected checkboxes and toggle the download button
+            const selectAllCheckbox = document.getElementById('selectAll');
+            const selectPersonCheckboxes = document.querySelectorAll('.selectPerson');
+            const downloadButton = document.getElementById('downloadButton');
+            const selectedPersonnelIds = [];
+
+            // Select all checkboxes functionality
+            selectAllCheckbox.addEventListener('change', function () {
+                const isChecked = selectAllCheckbox.checked;
+                selectPersonCheckboxes.forEach(checkbox => {
+                    checkbox.checked = isChecked;
+                });
+                toggleDownloadButton();
+            });
+
+            // Track individual checkbox selections
+            selectPersonCheckboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', function () {
+                    toggleDownloadButton();
+                });
+            });
+
+            function toggleDownloadButton() {
+                selectedPersonnelIds.length = 0; // Reset the selected IDs
+                selectPersonCheckboxes.forEach(checkbox => {
+                    if (checkbox.checked) {
+                        selectedPersonnelIds.push(checkbox.dataset.id);
+                    }
+                });
+
+                // Enable button if any checkbox is selected
+                downloadButton.disabled = selectedPersonnelIds.length === 0;
+            }
+
+            // Handle the export request
+            downloadButton.addEventListener('click', function () {
+                if (selectedPersonnelIds.length > 0) {
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = '{{ path('export_publications') }}';
+
+                    selectedPersonnelIds.forEach(id => {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = 'personnelIds[]';
+                        input.value = id;
+                        form.appendChild(input);
+                    });
+
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+            });
+
 
             // 📊 Pie Chart - Publication Types
             var publicationTypesData = {{ statistics.publicationTypes|json_encode|raw }};
@@ -370,70 +424,8 @@
             {% endif %}
         });
 
-        document.addEventListener('DOMContentLoaded', function () {
-            $('#personnelTable').DataTable({
-                language: { url: '//cdn.datatables.net/plug-ins/1.13.1/i18n/fr-FR.json' },
-                responsive: true,
-                autoWidth: false,
-                pagingType: "full_numbers",
-                pageLength: 10,
-                lengthMenu: [10, 25, 50, 100],
-                order: [[1,'desc']] // Sort by Publications Count
-            });
 
-            // Track selected checkboxes and toggle the download button
-            const selectAllCheckbox = document.getElementById('selectAll');
-            const selectPersonCheckboxes = document.querySelectorAll('.selectPerson');
-            const downloadButton = document.getElementById('downloadButton');
-            const selectedPersonnelIds = [];
 
-            // Select all checkboxes functionality
-            selectAllCheckbox.addEventListener('change', function () {
-                const isChecked = selectAllCheckbox.checked;
-                selectPersonCheckboxes.forEach(checkbox => {
-                    checkbox.checked = isChecked;
-                });
-                toggleDownloadButton();
-            });
-
-            // Track individual checkbox selections
-            selectPersonCheckboxes.forEach(checkbox => {
-                checkbox.addEventListener('change', function () {
-                    toggleDownloadButton();
-                });
-            });
-
-            function toggleDownloadButton() {
-                selectedPersonnelIds.length = 0; // Reset the selected IDs
-                selectPersonCheckboxes.forEach(checkbox => {
-                    if (checkbox.checked) {
-                        selectedPersonnelIds.push(checkbox.dataset.id);
-                    }
-                });
-
-                // Enable button if any checkbox is selected
-                downloadButton.disabled = selectedPersonnelIds.length === 0;
-            }
-
-            // Handle the export request
-            downloadButton.addEventListener('click', function () {
-                if (selectedPersonnelIds.length > 0) {
-                    const form = document.createElement('form');
-                    form.method = 'POST';
-                    form.action = '{{ path('export_publications') }}';
-
-                    selectedPersonnelIds.forEach(id => {
-                        const input = document.createElement('input');
-                        input.type = 'hidden';
-                        input.name = 'personnelIds[]';
-                        input.value = id;
-                        form.appendChild(input);
-                    });
-
-                    document.body.appendChild(form);
-                    form.submit();
-                }
-            });
-        });
+ 
     </script>
 {% endblock %}
