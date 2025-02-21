@@ -7,14 +7,13 @@
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.1/css/jquery.dataTables.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.4.0/css/responsive.dataTables.min.css">
     <style>
-
-    .form-select {
-    appearance: none;
-    padding-right: 30px; /* Make space for arrow */
-    background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="gray" class="bi bi-caret-down-fill" viewBox="0 0 16 16"> <path d="M7.247 11.14 2.451 5.658a.5.5 0 0 1 .416-.82h10.266a.5.5 0 0 1 .416.82l-4.796 5.482a.5.5 0 0 1-.832 0z"/> </svg>')
-    no-repeat right 10px center;
-    background-size: 12px;
-}
+        .form-select {
+            appearance: none;
+            padding-right: 30px; /* Make space for arrow */
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="gray" class="bi bi-caret-down-fill" viewBox="0 0 16 16"> <path d="M7.247 11.14 2.451 5.658a.5.5 0 0 1 .416-.82h10.266a.5.5 0 0 1 .416.82l-4.796 5.482a.5.5 0 0 1-.832 0z"/> </svg>')
+            no-repeat right 10px center;
+            background-size: 12px;
+        }
 
         .chart-container {
             display: flex;
@@ -39,56 +38,101 @@
             height: 100%;
         }
 
-/* Ensure table has no black lines under rows and keeps spacing clean */
-#personnelTable {
-    width: 100%;
-    border-collapse: collapse; /* Removes default borders between rows */
-    border-spacing: 0; /* Ensures no gaps between table cells */
-}
+        /* Ensure table has no black lines under rows and keeps spacing clean */
+        #personnelTable {
+            width: 100%;
+            border-collapse: collapse; /* Removes default borders between rows */
+            border-spacing: 0; /* Ensures no gaps between table cells */
+        }
 
-#personnelTable thead th {
-    background-color: #ff6632;
-    color: white;
-    text-align: center;
-    padding: 12px;
-    border: none;
-    letter-spacing: 0.5px; /* Tiny space between title cells */
-}
+        #personnelTable thead th {
+            background-color: #ff6632;
+            color: white;
+            text-align: center;
+            padding: 12px;
+            border: none;
+            letter-spacing: 0.5px; /* Tiny space between title cells */
+        }
 
-/* Remove border under rows */
-#personnelTable tbody tr {
-    background: #fff;
-    border-bottom: none !important; /* Ensure no black line under rows */
-}
+        /* Remove border under rows */
+        #personnelTable tbody tr {
+            background: #fff;
+            border-bottom: none !important; /* Ensure no black line under rows */
+        }
 
-/* Center content in all table cells */
-#personnelTable td, #personnelTable th {
-    text-align: center;
-    vertical-align: middle;
-    padding: 12px;
-}
+        /* Center content in all table cells */
+        #personnelTable td, #personnelTable th {
+            text-align: center;
+            vertical-align: middle;
+            padding: 12px;
+        }
 
-/* Add slight spacing between header cells */
-#personnelTable thead th:not(:last-child) {
-    padding-right: 10px;
-}
+        /* Add slight spacing between header cells */
+        #personnelTable thead th:not(:last-child) {
+            padding-right: 10px;
+        }
 
-/* Remove hover effect shadow */
-#personnelTable tbody tr:hover {
-    background-color: #f9f9f9;
-    box-shadow: none !important;
-}
+        /* Remove hover effect shadow */
+        #personnelTable tbody tr:hover {
+            background-color: #f9f9f9;
+            box-shadow: none !important;
+        }
 
-/* Remove all borders from table */
-#personnelTable td {
-    border: none !important; /* Ensure no unwanted black lines */
-}
-
+        /* Remove all borders from table */
+        #personnelTable td {
+            border: none !important; /* Ensure no unwanted black lines */
+        }
 
         .dataTables_filter {
             margin-bottom: 20px !important;
         }
- 
+
+        /* Style the download button */
+        #downloadButton {
+            background-color: #28a745; /* Green button */
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        #downloadButton:hover {
+            background-color: #218838; /* Darker green on hover */
+        }
+
+        #downloadButton:disabled {
+            background-color: #c6c6c6;
+            cursor: not-allowed;
+        }
+
+        /* Style the header right alignment */
+        .dataTables_filter {
+            float: left;
+        }
+
+        /* Button in the right corner of the DataTable search box */
+        .dataTables_filter + .btn-container {
+            float: right;
+            margin-left: 10px;
+        }
+
+        /* Adjust the position of the download button */
+        .dataTables_wrapper .dataTables_filter {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .dataTables_wrapper .dataTables_filter label {
+            margin-bottom: 0;
+        }
+
+        .dataTables_wrapper .dataTables_filter input {
+            margin-left: 10px;
+        }
     </style>
 {% endblock %}
 
@@ -133,7 +177,6 @@
     </div>
 </div>
 
-
 <!-- Total Publications -->
 <div class="alert alert-info text-center">
     <h5>Total Publications: <strong>{{ statistics.totalPublications }}</strong></h5>
@@ -169,30 +212,34 @@
     {% endif %}
 </div>
 
-<!-- Personnel Contribution DataTable -->
+<!-- Data Table -->
 <div class="card shadow-lg">
     <div class="card-body">
         <div class="table-responsive">
+            <!-- Download Button and Search Field -->
+            <div class="d-flex justify-content-end align-items-center mb-3">
+                <button id="downloadButton" class="btn btn-success" disabled>
+                    Télécharger les Données
+                </button>
+            </div>
             <table id="personnelTable" class="table table-striped">
-<thead>
-    <tr>
-        <th><input type="checkbox" id="selectAll"></th> <!-- Checkbox to select all -->
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" id="selectAll"></th> <!-- Checkbox to select all -->
                         <th>Nom et Prénom</th> <!-- Name column -->
                         <th>Nombre total de publications</th> <!-- Publications Count -->
-                         <th>Actions</th> <!-- Actions column -->
+                        <th>Actions</th> <!-- Actions column -->
                     </tr>
                 </thead>
-<tbody>
-    {% for person in statistics.personnelContributions %}
-        <tr>
-            <td><input type="checkbox" class="selectPerson" data-id="{{ person.id }}"></td> <!-- Individual checkbox -->
-
+                <tbody>
+                    {% for person in statistics.personnelContributions %}
+                        <tr>
+                            <td><input type="checkbox" class="selectPerson" data-id="{{ person.id }}"></td>
                             <td>{{ person.nom }} {{ person.prenom }}</td>
                             <td>{{ person.publicationCount }}</td>
- 
                             <td>
                                 <a href="{{ path('personnel_details', {id: person.id, year: selectedYear, structure: selectedStructure}) }}" class="btn btn-info">
-                                    <i class="fas fa-eye"></i> <!-- Eye icon for "View" action -->
+                                    <i class="fas fa-eye"></i>
                                 </a>
                             </td>
                         </tr>
@@ -201,11 +248,6 @@
             </table>
         </div>
     </div>
-</div>
-<div class="text-center mt-4">
-    <button id="downloadButton" class="btn btn-success" disabled>
-        Télécharger les Données
-    </button>
 </div>
 
 {% endblock %}
@@ -218,179 +260,180 @@
     <script src="https://cdn.datatables.net/responsive/2.4.0/js/dataTables.responsive.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        $('#personnelTable').DataTable({
-            language: { url: '//cdn.datatables.net/plug-ins/1.13.1/i18n/fr-FR.json' },
-            responsive: true,
-            autoWidth: false,
-            pagingType: "full_numbers",
-            pageLength: 10,
-            lengthMenu: [10, 25, 50, 100],
-            order: [[1,'desc']] // Sort by Publications Count
-        });
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            $('#personnelTable').DataTable({
+                language: { url: '//cdn.datatables.net/plug-ins/1.13.1/i18n/fr-FR.json' },
+                responsive: true,
+                autoWidth: false,
+                pagingType: "full_numbers",
+                pageLength: 10,
+                lengthMenu: [10, 25, 50, 100],
+                order: [[1,'desc']] // Sort by Publications Count
+            });
 
-        // 📊 Pie Chart - Publication Types
-        var publicationTypesData = {{ statistics.publicationTypes|json_encode|raw }};
-        var labels = Object.keys(publicationTypesData);
-        var data = Object.values(publicationTypesData);
+            // 📊 Pie Chart - Publication Types
+            var publicationTypesData = {{ statistics.publicationTypes|json_encode|raw }};
+            var labels = Object.keys(publicationTypesData);
+            var data = Object.values(publicationTypesData);
 
-        var publicationTypesChart = new ApexCharts(document.querySelector("#publicationTypesChart"), {
-            chart: {
-                type: 'pie',
-                height: 400,
-                events: {
-                    dataPointSelection: function(event, chartContext, config) {
-                        let selectedType = labels[config.dataPointIndex];
-                        let year = "{{ selectedYear }}";
-                        let structure = "{{ selectedStructure }}";
-
-                        let url = "{{ path('publication_type_details', { 'type': '__TYPE__' }) }}".replace('__TYPE__', encodeURIComponent(selectedType));
-                        let params = new URLSearchParams();
-                        if (year !== 'ALL') params.append('year', year);
-                        if (structure !== 'ALL') params.append('structure', structure);
-
-                        if (params.toString()) url += '?' + params.toString();
-                        window.location.href = url;
-                    }
-                }
-            },
-            series: data,
-            labels: labels,
-            plotOptions: {
-                pie: {
-                    donut: { size: '65%' },
-                    dataLabels: { enabled: true }
-                }
-            },
-            tooltip: { y: { formatter: (val) => `${val} publications` } }
-        });
-        publicationTypesChart.render();
-
-        // 📈 Enhanced Line Chart - Trends Over Years (Only if Year = ALL)
-        {% if selectedYear == 'ALL' %}
-        var trendsData = {{ statistics.publicationTrends|json_encode|raw }};
-        var years = Object.keys(trendsData);
-        var values = Object.values(trendsData);
-
-        if (years.length > 0) {
-            var publicationTrendsChart = new ApexCharts(document.querySelector("#publicationTrendsChart"), {
+            var publicationTypesChart = new ApexCharts(document.querySelector("#publicationTypesChart"), {
                 chart: {
-                    type: 'area',
+                    type: 'pie',
                     height: 400,
-                    toolbar: { show: false },
-                    animations: { enabled: true, easing: 'easeinout', speed: 800 }
-                },
-                series: [{ name: "Publications", data: values }],
-                xaxis: {
-                    categories: years,
-                    title: { text: "Année" },
-                    labels: { style: { colors: '#666', fontSize: '12px' } }
-                },
-                yaxis: {
-                    title: { text: "Nombre de Publications" },
-                    min: 0,
-                    labels: { style: { colors: '#666', fontSize: '12px' } }
-                },
-                markers: {
-                    size: 6,
-                    colors: ["#FF6632"],
-                    strokeColors: "#fff",
-                    strokeWidth: 2,
-                    hover: { size: 9 }
-                },
-                colors: ["#FF6632"],
-                stroke: { curve: 'smooth', width: 3 },
-                fill: {
-                    type: 'gradient',
-                    gradient: {
-                        shade: 'light',
-                        type: "vertical",
-                        shadeIntensity: 0.3,
-                        gradientToColors: ['#FFA07A'],
-                        inverseColors: false,
-                        opacityFrom: 0.8,
-                        opacityTo: 0.3,
+                    events: {
+                        dataPointSelection: function(event, chartContext, config) {
+                            let selectedType = labels[config.dataPointIndex];
+                            let year = "{{ selectedYear }}";
+                            let structure = "{{ selectedStructure }}";
+
+                            let url = "{{ path('publication_type_details', { 'type': '__TYPE__' }) }}".replace('__TYPE__', encodeURIComponent(selectedType));
+                            let params = new URLSearchParams();
+                            if (year !== 'ALL') params.append('year', year);
+                            if (structure !== 'ALL') params.append('structure', structure);
+
+                            if (params.toString()) url += '?' + params.toString();
+                            window.location.href = url;
+                        }
                     }
                 },
-                tooltip: {
-                    theme: "dark",
-                    x: { show: true },
-                    y: { formatter: (val) => `${val} publications` }
+                series: data,
+                labels: labels,
+                plotOptions: {
+                    pie: {
+                        donut: { size: '65%' },
+                        dataLabels: { enabled: true }
+                    }
                 },
-                grid: {
-                    borderColor: "#f1f1f1",
-                    strokeDashArray: 5,
+                tooltip: { y: { formatter: (val) => `${val} publications` } }
+            });
+            publicationTypesChart.render();
+
+            // 📈 Enhanced Line Chart - Trends Over Years (Only if Year = ALL)
+            {% if selectedYear == 'ALL' %}
+            var trendsData = {{ statistics.publicationTrends|json_encode|raw }};
+            var years = Object.keys(trendsData);
+            var values = Object.values(trendsData);
+
+            if (years.length > 0) {
+                var publicationTrendsChart = new ApexCharts(document.querySelector("#publicationTrendsChart"), {
+                    chart: {
+                        type: 'area',
+                        height: 400,
+                        toolbar: { show: false },
+                        animations: { enabled: true, easing: 'easeinout', speed: 800 }
+                    },
+                    series: [{ name: "Publications", data: values }],
+                    xaxis: {
+                        categories: years,
+                        title: { text: "Année" },
+                        labels: { style: { colors: '#666', fontSize: '12px' } }
+                    },
+                    yaxis: {
+                        title: { text: "Nombre de Publications" },
+                        min: 0,
+                        labels: { style: { colors: '#666', fontSize: '12px' } }
+                    },
+                    markers: {
+                        size: 6,
+                        colors: ["#FF6632"],
+                        strokeColors: "#fff",
+                        strokeWidth: 2,
+                        hover: { size: 9 }
+                    },
+                    colors: ["#FF6632"],
+                    stroke: { curve: 'smooth', width: 3 },
+                    fill: {
+                        type: 'gradient',
+                        gradient: {
+                            shade: 'light',
+                            type: "vertical",
+                            shadeIntensity: 0.3,
+                            gradientToColors: ['#FFA07A'],
+                            inverseColors: false,
+                            opacityFrom: 0.8,
+                            opacityTo: 0.3,
+                        }
+                    },
+                    tooltip: {
+                        theme: "dark",
+                        x: { show: true },
+                        y: { formatter: (val) => `${val} publications` }
+                    },
+                    grid: {
+                        borderColor: "#f1f1f1",
+                        strokeDashArray: 5,
+                    }
+                });
+                publicationTrendsChart.render();
+            }
+            {% endif %}
+        });
+
+        document.addEventListener('DOMContentLoaded', function () {
+            $('#personnelTable').DataTable({
+                language: { url: '//cdn.datatables.net/plug-ins/1.13.1/i18n/fr-FR.json' },
+                responsive: true,
+                autoWidth: false,
+                pagingType: "full_numbers",
+                pageLength: 10,
+                lengthMenu: [10, 25, 50, 100],
+                order: [[1,'desc']] // Sort by Publications Count
+            });
+
+            // Track selected checkboxes and toggle the download button
+            const selectAllCheckbox = document.getElementById('selectAll');
+            const selectPersonCheckboxes = document.querySelectorAll('.selectPerson');
+            const downloadButton = document.getElementById('downloadButton');
+            const selectedPersonnelIds = [];
+
+            // Select all checkboxes functionality
+            selectAllCheckbox.addEventListener('change', function () {
+                const isChecked = selectAllCheckbox.checked;
+                selectPersonCheckboxes.forEach(checkbox => {
+                    checkbox.checked = isChecked;
+                });
+                toggleDownloadButton();
+            });
+
+            // Track individual checkbox selections
+            selectPersonCheckboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', function () {
+                    toggleDownloadButton();
+                });
+            });
+
+            function toggleDownloadButton() {
+                selectedPersonnelIds.length = 0; // Reset the selected IDs
+                selectPersonCheckboxes.forEach(checkbox => {
+                    if (checkbox.checked) {
+                        selectedPersonnelIds.push(checkbox.dataset.id);
+                    }
+                });
+
+                // Enable button if any checkbox is selected
+                downloadButton.disabled = selectedPersonnelIds.length === 0;
+            }
+
+            // Handle the export request
+            downloadButton.addEventListener('click', function () {
+                if (selectedPersonnelIds.length > 0) {
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = '{{ path('export_publications') }}';
+
+                    selectedPersonnelIds.forEach(id => {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = 'personnelIds[]';
+                        input.value = id;
+                        form.appendChild(input);
+                    });
+
+                    document.body.appendChild(form);
+                    form.submit();
                 }
             });
-            publicationTrendsChart.render();
-        }
-        {% endif %}
-    });
-
-
-
-    document.addEventListener('DOMContentLoaded', function () {
-    const selectAllCheckbox = document.getElementById('selectAll');
-    const selectPersonCheckboxes = document.querySelectorAll('.selectPerson');
-    const downloadButton = document.getElementById('downloadButton');
-    const selectedPersonnelIds = [];
-
-    // Select all checkboxes functionality
-    selectAllCheckbox.addEventListener('change', function () {
-        const isChecked = selectAllCheckbox.checked;
-        selectPersonCheckboxes.forEach(checkbox => {
-            checkbox.checked = isChecked;
         });
-        toggleDownloadButton();
-    });
-
-    // Track individual checkbox selections
-    selectPersonCheckboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', function () {
-            toggleDownloadButton();
-        });
-    });
-
-    function toggleDownloadButton() {
-        selectedPersonnelIds.length = 0; // Reset the selected IDs
-        selectPersonCheckboxes.forEach(checkbox => {
-            if (checkbox.checked) {
-                selectedPersonnelIds.push(checkbox.dataset.id);
-            }
-        });
-
-        // Enable button if any checkbox is selected
-        if (selectedPersonnelIds.length > 0) {
-            downloadButton.disabled = false;
-        } else {
-            downloadButton.disabled = true;
-        }
-    }
-
-    // Handle the export request
-    downloadButton.addEventListener('click', function () {
-        if (selectedPersonnelIds.length > 0) {
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '{{ path('export_publications') }}';
-            
-            selectedPersonnelIds.forEach(id => {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'personnelIds[]';
-                input.value = id;
-                form.appendChild(input);
-            });
-
-            document.body.appendChild(form);
-            form.submit();
-        }
-    });
-});
-
-</script>
-
+    </script>
 {% endblock %}
-
-
